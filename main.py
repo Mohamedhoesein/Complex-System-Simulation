@@ -15,7 +15,7 @@ class Individual:
     """
     X Y coordinates of an individual.
     """
-    def __init__(self, x: float, y: float):
+    def __init__(self, x: float, y: float, theta: float):
         """
         Initialise a position for an individual.
         
@@ -26,6 +26,7 @@ class Individual:
         """
         self.x = x
         self.y = y
+        self.theta = theta
 
 class Area:
     """
@@ -62,6 +63,13 @@ class Area:
         :param d: The maximum diameter of the initial point.
         :type d: float
         """
+        assert x > 0
+        assert y > 0
+        for omega in species_omega:
+            assert omega >= 2
+        assert m > 0
+        assert l > 0
+        assert d > 0
         self.x = x
         self.y = y
         self.species_omega = species_omega
@@ -99,20 +107,20 @@ class Area:
 
             l = self.l
             new_points = self.new_points(branch, delta, start, l)
+            all_points.append([start])
             all_points.append(new_points)
             # Keep track of the delta so later this can be used as the extra needed
             # offset for later branches.
-            previous_theta = delta
             for n in range(1, self.m):
                 # Reduce the branch length as specified in the algorithms
                 l = l/(2**n)
-                # Calculate the new range from which to draw delta delta0 is \delta_0 in latex,
-                # delta_diff is \Delta\delta in latex
-                delta = self.delta0*(self.delta_diff)**(2*int(n/2)/self.m)
-                delta = (np.random.random() * 2 * delta) - delta
                 points = new_points.copy()
                 new_points = []
                 for point in points:
+                    # Calculate the new range from which to draw delta delta0 is \delta_0 in latex,
+                    # delta_diff is \Delta\delta in latex
+                    delta = self.delta0*(self.delta_diff)**(2*int(n/2)/self.m)
+                    delta = (np.random.random() * 2 * delta) - delta
                     # Determine how many branches
                     branch = np.random.choice(
                         [Branch.LEFT, Branch.RIGHT, Branch.BOTH],
@@ -125,13 +133,11 @@ class Area:
                     new_points.extend(
                         self.new_points(
                             branch,
-                            previous_theta + delta + np.pi/2,
+                            point.theta + delta + np.pi/2,
                             point,
                             l
                         )
                     )
-                # Add the extra degree
-                previous_theta += delta + np.pi/2
                 all_points.append(new_points)
         return all_points
 
@@ -142,7 +148,7 @@ class Area:
         :return: The initial point.
         :rtype: Individual
         """
-        middle = Individual((self.x+1)/2, (self.y+1)/2)
+        middle = Individual((self.x+1)/2, (self.y+1)/2, 0)
         # x+1 and y+1 are needed because we take [0,x] as a valid range which has x+1 integers,
         # and the same applies to y.
         x_offset = np.random.rand()*self.d
@@ -151,7 +157,8 @@ class Area:
         y_radian = np.random.rand()*2*np.pi
         return Individual(
             middle.x + x_offset*np.cos(x_radian),
-            middle.y + y_offset*np.sin(y_radian)
+            middle.y + y_offset*np.sin(y_radian),
+            0
         )
 
     def new_points(
@@ -179,11 +186,13 @@ class Area:
         # https://stackoverflow.com/questions/2912779/how-to-calculate-a-point-with-an-given-center-angle-and-radius
         left_branch = Individual(
             point.x + distance*np.cos(theta),
-            point.y + distance*np.sin(theta)
+            point.y + distance*np.sin(theta),
+            theta
         )
         right_branch = Individual(
-            point.x + distance*np.cos(np.pi - theta),
-            point.y + distance*np.sin(np.pi - theta)
+            point.x + distance*np.cos(np.pi + theta),
+            point.y + distance*np.sin(np.pi + theta),
+            theta
         )
         if branch == Branch.LEFT:
             return [left_branch]
@@ -194,7 +203,7 @@ class Area:
 if __name__ == "__main__":
     grid = Area(x=200, y=200, species_omega=[5], m=14, l=80, delta0=0.1, delta_diff=8, d=5)
     PLOT_COUNT = len(grid.points)
-    colors = range(1, PLOT_COUNT)
+    colors = range(0, PLOT_COUNT)
     for processed_points, color in zip(grid.points, colors):
         x_scatter, y_scatter = zip(*map(lambda point: (point.x, point.y), processed_points))
         plt.scatter(x_scatter, y_scatter)
