@@ -64,7 +64,7 @@ class Area:
         all_points = []
         for s in self.species_omega:
             # For the current species s calculate the probability to have a certain amount of branches.
-            # Given that for a signle branche 1-alpha=2**(-omega_s/2) we get alpha=1-2**(-omega_s/2).
+            # Given that for a single branch 1-alpha=2**(-omega_s/2) we get alpha=1-2**(-omega_s/2).
             # From this we can get the probabilities for each branch
             alpha = 1-2**(-s/2)
             single_branch = 1-alpha
