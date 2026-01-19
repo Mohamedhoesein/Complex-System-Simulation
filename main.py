@@ -24,7 +24,7 @@ class Grid:
             both_branch = 2*alpha-1
             branch = np.random.choice(['l', 'r', 'b'], p=[single_branch, single_branch, both_branch])
             delta = self.delta0
-            start = [np.random.rand() * self.x, np.random.rand(self.y)]
+            start = [np.random.rand() * self.x, np.random.rand() * self.y]
             new_points = self.new_points(branch, delta, start)
             l = self.l
             previous_delta = delta + np.pi/2
@@ -37,10 +37,9 @@ class Grid:
                 for point in p:
                     branch = np.random.choice(['l', 'r', 'b'], p=[single_branch, single_branch, both_branch])
                     new_points.extend(self.new_points(branch, delta + previous_delta, point))
+                previous_delta += delta + np.pi/2
             all_points.append(new_points)
         return all_points
-                    
-
 
     def new_points(self, branch, delta, point):
         left_branch = [point[0]*np.cos(delta), point[1]*np.sin(delta)]
