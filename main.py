@@ -1,5 +1,7 @@
-import numpy as np
 from enum import Enum
+
+import numpy as np
+from matplotlib import pyplot as plt
 
 class Branch(Enum):
     """
@@ -26,13 +28,26 @@ class Individual:
         self.y = y
 
 class Area:
-    def __init__(self, x: float, y: float, species_omega: list[float], m: int, l: float, delta0: float, delta_diff: float):
+    """
+    Container for different individuals.
+    """
+    def __init__(
+            self,
+            x: float,
+            y: float,
+            species_omega: list[float],
+            m: int,
+            l: float,
+            delta0: float,
+            delta_diff: float,
+            d: float
+        ):
         """
         Initialise an area.
         
-        :param x: The maximum x coordinate.
+        :param x: The maximum x coordinate, assuming the range [0,x] is valid.
         :type x: float
-        :param y: The maximum y coordinate.
+        :param y: The maximum y coordinate, assuming the range [0,x] is valid.
         :type y: float
         :param species_omega: The omega for each species.
         :type species_omega: list[float]
@@ -44,6 +59,8 @@ class Area:
         :type delta0: float
         :param delta_diff: The change in delta from which to draw a delta for a new brench.
         :type delta_diff: float
+        :param d: The maximum diameter of the initial point.
+        :type d: float
         """
         self.x = x
         self.y = y
@@ -52,6 +69,7 @@ class Area:
         self.l = l
         self.delta0 = delta0
         self.delta_diff = delta_diff
+        self.d = d
         self.points = self.place()
 
     def place(self) -> list[list[Individual]]:
@@ -70,37 +88,79 @@ class Area:
             single_branch = 1-alpha
             both_branch = 2*alpha-1
             # Select the way to branch.
-            branch = np.random.choice([Branch.LEFT, Branch.RIGHT, Branch.BOTH], p=[single_branch, single_branch, both_branch])
+            branch = np.random.choice(
+                [Branch.LEFT, Branch.RIGHT, Branch.BOTH],
+                p=[single_branch, single_branch, both_branch]
+            )
             # The initial offset is just delta0 which is a parameter.
             delta = self.delta0
             # We randomly generate a starting point.
-            start = [np.random.rand() * self.x, np.random.rand() * self.y]
+            start = self.get_initial_point()
 
             l = self.l
             new_points = self.new_points(branch, delta, start, l)
             all_points.append(new_points)
-            # Keep track of the delta so later this can be used as the extra needed offset for later branches.
+            # Keep track of the delta so later this can be used as the extra needed
+            # offset for later branches.
             previous_theta = delta
             for n in range(1, self.m):
                 # Reduce the branch length as specified in the algorithms
                 l = l/(2**n)
-                # Calculate the new range from which to draw delta delta0 is \delta_0 in latex, delta_diff is \Delta\delta in latex
+                # Calculate the new range from which to draw delta delta0 is \delta_0 in latex,
+                # delta_diff is \Delta\delta in latex
                 delta = self.delta0*(self.delta_diff)**(2*int(n/2)/self.m)
                 delta = (np.random.random() * 2 * delta) - delta
-                p = new_points.copy()
+                points = new_points.copy()
                 new_points = []
-                for point in p:
+                for point in points:
                     # Determine how many branches
-                    branch = np.random.choice([Branch.LEFT, Branch.RIGHT, Branch.BOTH], p=[single_branch, single_branch, both_branch])
-                    # We use previous_delta + np.pi/2 because the new delta is a delta from the line which has a right angle with the previous line.
-                    # The previous line has a delta of previous_delta, and np.pi/2 gives us the needed radians for the 90 degrees.
-                    new_points.extend(self.new_points(branch, previous_theta + delta + np.pi/2, point, l))
+                    branch = np.random.choice(
+                        [Branch.LEFT, Branch.RIGHT, Branch.BOTH],
+                        p=[single_branch, single_branch, both_branch]
+                    )
+                    # We use previous_delta + np.pi/2 because the new delta is a delta
+                    # from the line which has a right angle with the previous line.
+                    # The previous line has a delta of previous_delta, and np.pi/2 gives
+                    # us the needed radians for the 90 degrees.
+                    new_points.extend(
+                        self.new_points(
+                            branch,
+                            previous_theta + delta + np.pi/2,
+                            point,
+                            l
+                        )
+                    )
                 # Add the extra degree
                 previous_theta += delta + np.pi/2
-            all_points.append(new_points)
+                all_points.append(new_points)
         return all_points
 
-    def new_points(self, branch: Branch, theta: float, point: Individual, distance: float) -> list[Individual]:
+    def get_initial_point(self) -> Individual:
+        """
+        Create the initial point for a tree.
+        
+        :return: The initial point.
+        :rtype: Individual
+        """
+        middle = Individual((self.x+1)/2, (self.y+1)/2)
+        # x+1 and y+1 are needed because we take [0,x] as a valid range which has x+1 integers,
+        # and the same applies to y.
+        x_offset = np.random.rand()*self.d
+        y_offset = np.random.rand()*self.d
+        x_radian = np.random.rand()*2*np.pi
+        y_radian = np.random.rand()*2*np.pi
+        return Individual(
+            middle.x + x_offset*np.cos(x_radian),
+            middle.y + y_offset*np.sin(y_radian)
+        )
+
+    def new_points(
+            self,
+            branch: Branch,
+            theta: float,
+            point: Individual,
+            distance: float
+        ) -> list[Individual]:
         """
         Calculate the new branching points.
         
@@ -115,9 +175,16 @@ class Area:
         :return: The new individuals.
         :rtype: list[Individual]
         """
-        # To calculate the new points we use the calculation from https://stackoverflow.com/questions/2912779/how-to-calculate-a-point-with-an-given-center-angle-and-radius
-        left_branch = [point.x+distance*np.cos(theta), point.y+distance*np.sin(theta)]
-        right_branch = [point.x+distance*np.cos(np.pi - theta), point.y+distance*np.sin(np.pi - theta)]
+        # To calculate the new points we use the calculation from
+        # https://stackoverflow.com/questions/2912779/how-to-calculate-a-point-with-an-given-center-angle-and-radius
+        left_branch = Individual(
+            point.x + distance*np.cos(theta),
+            point.y + distance*np.sin(theta)
+        )
+        right_branch = Individual(
+            point.x + distance*np.cos(np.pi - theta),
+            point.y + distance*np.sin(np.pi - theta)
+        )
         if branch == Branch.LEFT:
             return [left_branch]
         if branch == Branch.RIGHT:
@@ -125,4 +192,10 @@ class Area:
         return [left_branch, right_branch]
 
 if __name__ == "__main__":
-    grid = Area(100, 100, [0.1], 10, 14, 0.1, 8)
+    grid = Area(x=200, y=200, species_omega=[5], m=14, l=80, delta0=0.1, delta_diff=8, d=5)
+    PLOT_COUNT = len(grid.points)
+    colors = range(1, PLOT_COUNT)
+    for processed_points, color in zip(grid.points, colors):
+        x_scatter, y_scatter = zip(*map(lambda point: (point.x, point.y), processed_points))
+        plt.scatter(x_scatter, y_scatter)
+        plt.savefig("./test.pdf")
