@@ -247,6 +247,7 @@ def main():
     """
     t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
     alpha = list(map(lambda o: 2**o, t))
+    #TODO: change the range so that the proper amount of species for each alpha is used.
     species_alpha = [o for o in alpha for i in range(1)]
     grid = Field(
         species_alpha=species_alpha,
@@ -270,6 +271,7 @@ def main():
 
     r_bins = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
     r_centers = 0.5 * (r_bins[:-1] + r_bins[1:])
+    # #TODO: Do the correlation within an alpha, and not across.
     gs = grid.all_pair_correlation(r_bins, l * l)
     plt.clf()
     plt.loglog(r_centers, gs, 'o-')
