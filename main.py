@@ -28,7 +28,7 @@ class Individual:
         self.y = y
         self.theta = theta
 
-class Area:
+class Field:
     """
     Container for different individuals.
     """
@@ -107,8 +107,6 @@ class Area:
 
             l = self.l
             new_points = self.new_points(branch, delta, start, l)
-            all_points.append([start])
-            all_points.append(new_points)
             # Keep track of the delta so later this can be used as the extra needed
             # offset for later branches.
             for n in range(1, self.m):
@@ -120,7 +118,7 @@ class Area:
                     # Calculate the new range from which to draw delta delta0 is \delta_0 in latex,
                     # delta_diff is \Delta\delta in latex
                     delta = self.delta0*(self.delta_diff)**(2*int(n/2)/self.m)
-                    delta = (np.random.random() * 2 * delta) - delta
+                    theta = (np.random.random() * 2 * delta) - delta
                     # Determine how many branches
                     branch = np.random.choice(
                         [Branch.LEFT, Branch.RIGHT, Branch.BOTH],
@@ -133,7 +131,7 @@ class Area:
                     new_points.extend(
                         self.new_points(
                             branch,
-                            point.theta + delta + np.pi/2,
+                            point.theta + theta + np.pi/2,
                             point,
                             l
                         )
@@ -200,11 +198,52 @@ class Area:
             return [right_branch]
         return [left_branch, right_branch]
 
+    def f(self, species: list[Individual], r: float) -> float:
+        """
+        Implement the proximity function Fs(r)
+        
+        :param self: Description
+        :param species: The species for which to implement the proximity function.
+        :type species: list[Individual]
+        :param R: The radius for which to check.
+        :type R: float
+        :return: The proximity values.
+        :rtype: float
+        """
+        a = np.pi*r**2
+        inverse_a = 1/a
+        for point in species:
+            distances = map(lambda other: np.sqrt((other.x-point.x)**2+(other.y-point.y)**2), species)
+            size = len(list(filter(
+                lambda x: abs(x) <= r and x != 0,
+                distances
+            )))
+            cummulator += size
+        return cummulator * inverse_a
+
+    def s(self, r: float) -> float:
+        cummulator = 0
+        for species in self.points:
+            cummulator += self.f(species, r)
+        return cummulator
+
 if __name__ == "__main__":
-    grid = Area(x=200, y=200, species_omega=[5], m=14, l=80, delta0=0.1, delta_diff=8, d=5)
+    omega = list(range(2, 14))
+    species_omega = [o for o in omega for i in range(100)]
+    grid = Field(
+        x=200,
+        y=200,
+        species_omega=species_omega,
+        m=14,
+        l=80,
+        delta0=0.1,
+        delta_diff=8,
+        d=5
+    )
+
     PLOT_COUNT = len(grid.points)
     colors = range(0, PLOT_COUNT)
     for processed_points, color in zip(grid.points, colors):
         x_scatter, y_scatter = zip(*map(lambda point: (point.x, point.y), processed_points))
         plt.scatter(x_scatter, y_scatter)
-        plt.savefig("./test.pdf")
+    plt.savefig("./test.png")
