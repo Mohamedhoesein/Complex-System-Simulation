@@ -202,7 +202,6 @@ class Field:
         """
         Implement the proximity function Fs(r)
         
-        :param self: Description
         :param species: The species for which to implement the proximity function.
         :type species: list[Individual]
         :param R: The radius for which to check.
@@ -222,6 +221,14 @@ class Field:
         return cummulator * inverse_a
 
     def s(self, r: float) -> float:
+        """
+        Imeplementation of the SAR satistic.
+        
+        :param r: The radius to use for the statistic.
+        :type r: float
+        :return: The SAR statistic of all species.
+        :rtype: float
+        """
         cummulator = 0
         for species in self.points:
             cummulator += self.f(species, r)
