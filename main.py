@@ -36,7 +36,7 @@ class Field:
             self,
             x: float,
             y: float,
-            species_omega: list[float],
+            species_alpha: list[float],
             m: int,
             l: float,
             delta0: float,
@@ -65,20 +65,64 @@ class Field:
         """
         assert x > 0
         assert y > 0
-        for omega in species_omega:
-            assert omega >= 2
+        # for omega in species_omega:
+        #     assert omega >= 2
         assert m > 0
         assert l > 0
         assert d > 0
         self.x = x
         self.y = y
-        self.species_omega = species_omega
+        self.species_omega = species_alpha
         self.m = m
         self.l = l
         self.delta0 = delta0
         self.delta_diff = delta_diff
         self.d = d
-        self.points = self.place()
+        # self.points = self.place()
+        self.points = []
+        for omega in self.species_omega:
+            self.points.append(self.generate_species(omega))
+
+    def generate_species(self, omega):
+        alpha = omega #1 - 2**(-omega/2)
+        p = [1-alpha, 1-alpha, 2*alpha-1]
+
+        # initial point
+        theta0 = np.random.uniform(0, 2*np.pi)
+
+        r0 = self.get_initial_point()
+        points = [Individual(r0.x, r0.y, theta0)]
+
+        l = self.l
+
+        for n in range(1, self.m+1):
+            l /= 2
+            new_points = []
+
+            delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
+
+            for p0 in points:
+                delta = np.random.uniform(-delta_max, delta_max)
+                theta = p0.theta + np.pi/2 + delta
+
+                branch = np.random.choice([Branch.LEFT, Branch.RIGHT, Branch.BOTH], p=p)
+
+                if branch in (Branch.LEFT, Branch.BOTH):
+                    new_points.append(
+                        Individual(p0.x + l*np.cos(theta),
+                                p0.y + l*np.sin(theta),
+                                theta)
+                    )
+                if branch in (Branch.RIGHT, Branch.BOTH):
+                    new_points.append(
+                        Individual(p0.x + l*np.cos(theta + np.pi),
+                                p0.y + l*np.sin(theta + np.pi),
+                                theta + np.pi)
+                    )
+
+            points = new_points
+
+        return points
 
     def place(self) -> list[list[Individual]]:
         """
@@ -101,7 +145,7 @@ class Field:
                 p=[single_branch, single_branch, both_branch]
             )
             # The initial offset is just delta0 which is a parameter.
-            delta = self.delta0
+            delta = np.random.random() * 2 * np.pi
             # We randomly generate a starting point.
             start = self.get_initial_point()
 
@@ -136,7 +180,7 @@ class Field:
                             l
                         )
                     )
-                all_points.append(new_points)
+            all_points.append(new_points)
         return all_points
 
     def get_initial_point(self) -> Individual:
@@ -146,7 +190,7 @@ class Field:
         :return: The initial point.
         :rtype: Individual
         """
-        middle = Individual((self.x+1)/2, (self.y+1)/2, 0)
+        middle = Individual(0, 0, 0)
         # x+1 and y+1 are needed because we take [0,x] as a valid range which has x+1 integers,
         # and the same applies to y.
         x_offset = np.random.rand()*self.d
@@ -234,13 +278,86 @@ class Field:
             cummulator += self.f(species, r)
         return cummulator
 
+    def rho_s(self, species: list[Individual], r: float) -> float:
+        count = 0
+        for point in species:
+            distances = map(lambda other: np.sqrt((other.x-point.x)**2+(other.y-point.y)**2), species)
+            size = len(list(filter(
+                lambda x: abs(x) <= r and x != 0,
+                distances
+            )))
+            if size > 0:
+                count += 1
+        if count == 0:
+            return 0
+        return 1/count
+
+    def rho(self) -> list[float]:
+        rhos = []
+        for species in self.points:
+            distance = 0
+            for point in species:
+                current_distance = sum(map(lambda other: np.sqrt((other.x-point.x)**2+(other.y-point.y)**2), species))
+                distance += current_distance
+            r = self.rho_s(species, 1)
+            if r == 0:
+                rhos.append(0)
+            else:
+                rhos.append(distance/r)
+        return rhos
+
+    def pair_correlation(self, species, r_bins, area):
+        """
+        Compute radial pair correlation function g(r) for one species.
+
+        :param species: list[Individual]
+        :param r_bins: array of bin edges
+        :param area: area of observation window
+        :return: g(r) values for each bin
+        """
+        points = np.array([(p.x, p.y) for p in species])
+        n = len(points)
+        if n < 2:
+            return np.zeros(len(r_bins) - 1)
+
+        # Pairwise distance matrix
+        dx = points[:, None, 0] - points[None, :, 0]
+        dy = points[:, None, 1] - points[None, :, 1]
+        d = np.sqrt(dx**2 + dy**2)
+
+        # Keep only upper triangle (exclude self-pairs and double counting)
+        d = d[np.triu_indices(n, k=1)]
+
+        # Histogram distances
+        counts, edges = np.histogram(d, bins=r_bins)
+
+        # Shell areas
+        r_inner = edges[:-1]
+        r_outer = edges[1:]
+        shell_areas = np.pi * (r_outer**2 - r_inner**2)
+
+        # Density
+        rho = n / area
+
+        # g(r)
+        g = counts / (rho * shell_areas * n)
+
+        return g
+
+    def mean_pair_correlation(self, r_bins, area):
+        gs = [self.pair_correlation(species, r_bins, area)
+            for species in self.points if len(species) > 1]
+        return gs
+
+
 if __name__ == "__main__":
-    omega = list(range(2, 14))
-    species_omega = [o for o in omega for i in range(100)]
+    t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
+    alpha = list(map(lambda o: 2**o, t))
+    species_alpha = [o for o in alpha for i in range(1)]
     grid = Field(
         x=200,
         y=200,
-        species_omega=species_omega,
+        species_alpha=species_alpha,
         m=14,
         l=80,
         delta0=0.1,
@@ -254,3 +371,21 @@ if __name__ == "__main__":
         x_scatter, y_scatter = zip(*map(lambda point: (point.x, point.y), processed_points))
         plt.scatter(x_scatter, y_scatter)
     plt.savefig("./test.png")
+    plt.clf()
+
+    r_min = 0.5      # about your minimum meaningful distance (e.g. grid scale)
+    r_max = 50.0     # about system size / 2
+    num_bins = 25
+    L = 80
+
+    r_bins = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
+    r_centers = 0.5 * (r_bins[:-1] + r_bins[1:])
+    gs = grid.mean_pair_correlation(r_bins, L * L)
+    i = 0
+    for g in gs:
+        plt.clf()
+        plt.loglog(r_centers, g, 'o-')
+        plt.xlabel("r")
+        plt.ylabel("g(r)")
+        plt.savefig(f"rho{i}.png")
+        i += 1
