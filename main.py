@@ -142,35 +142,84 @@ class Field:
             0
         )
 
-    def f(self, species: list[Individual], r: float) -> float:
-        """
-        Implement the proximity function Fs(r)
+    # def f(self, species: list[Individual], r: float) -> float:
+    #     """
+    #     Implement the proximity function Fs(r)
         
-        :param species: The species for which to implement the proximity function.
-        :type species: list[Individual]
-        :param R: The radius for which to check.
-        :type R: float
-        :return: The proximity values.
-        :rtype: float
-        """
-        a = np.pi*r**2
-        inverse_a = 1/a
-        for point in species:
-            distances = map(
-                lambda other:
-                    np.sqrt(
-                        (other.x-point.x)**2 + (other.y-point.y)**2
-                    ),
-                species
-            )
-            size = len(list(filter(
-                lambda x: abs(x) <= r and x != 0,
-                distances
-            )))
-            cummulator += size
-        return cummulator * inverse_a
+    #     :param species: The species for which to implement the proximity function.
+    #     :type species: list[Individual]
+    #     :param R: The radius for which to check.
+    #     :type R: float
+    #     :return: The proximity values.
+    #     :rtype: float
+    #     """
+    #     a = np.pi*r**2
+    #     inverse_a = 1/a
+    #     cummulator = 0
+    #     for point in species:
+    #         distances = map(
+    #             lambda other:
+    #                 np.sqrt(
+    #                     (other.x-point.x)**2 + (other.y-point.y)**2
+    #                 ),
+    #             species
+    #         )
+    #         size = len(list(filter(
+    #             lambda x: abs(x) <= r and x != 0,
+    #             distances
+    #         )))
+    #         cummulator += size
+    #     return cummulator * inverse_a
 
-    def s(self, r: float) -> float:
+    def f(self, species: list[Individual], r: float) -> float:
+        if len(species) < 2:
+            return 0.0
+        coords = np.array([[p.x, p.y] for p in species])
+        dx = coords[:, None, 0] - coords[None, :, 0]
+        dy = coords[:, None, 1] - coords[None, :, 1]
+        dists = np.sqrt(dx**2 + dy**2)
+        # exclude self-distances
+        dists = dists[dists > 0]
+        cummulator = np.sum(dists <= r)
+        area = np.pi * r**2
+        return cummulator / area
+
+
+    # def s(self, r: float) -> float:
+    #     """
+    #     Imeplementation of the SAR satistic.
+        
+    #     :param r: The radius to use for the statistic.
+    #     :type r: float
+    #     :return: The SAR statistic of all species.
+    #     :rtype: float
+    #     """
+    #     cummulator = 0
+    #     for species in self.points:
+    #         cummulator += self.f(species, r)
+    #     return cummulator
+
+    # def restrict(self, species: list[Individual], L: float, origin) -> list[Individual]:
+    #     x_0, y_0 = origin
+    #     half = L / 2
+    #     restricted_species = []
+
+    #     for individual in species:
+    #         if (x_0 - half <= individual.x <= x_0 + half) and (y_0 - half <= individual.y <= y_0 + half):
+    #             restricted_species.append(individual)
+
+    #     return restricted_species
+
+    def restriction_box(self, species: list[Individual], L: float, origin) -> list[Individual]:
+        x_0, y_0 = origin
+        half = L / 2
+        coords = np.array([[p.x, p.y] for p in species])
+        
+        mask =  (coords[:,0] >= x_0-half) & (coords[:,0] <= x_0+half) & \
+                (coords[:,1] >= y_0-half) & (coords[:,1] <= y_0+half)
+        return [species[i] for i in range(len(species)) if mask[i]]
+
+    def s(self, r: float, L: float, origin=(0.0, 0.0)) -> float:
         """
         Imeplementation of the SAR satistic.
         
@@ -181,8 +230,12 @@ class Field:
         """
         cummulator = 0
         for species in self.points:
-            cummulator += self.f(species, r)
-        return cummulator
+            restricted_area = self.restriction_box(species, L, origin)
+            if len(restricted_area) > 1:
+                cummulator += self.f(restricted_area, r)
+            elif len(restricted_area) == 1:
+                cummulator += 1
+        return cummulator    
 
     def pair_correlation(self, species: list[float], r_bins: np.ndarray[np.floating], area: float):
         """
@@ -245,6 +298,7 @@ def main():
     """
     Entry point for the calculations.
     """
+    np.random.seed(2)
     t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
     alpha = list(map(lambda o: 2**o, t))
     #TODO: change the range so that the proper amount of species for each alpha is used.
