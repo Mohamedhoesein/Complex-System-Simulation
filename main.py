@@ -1,6 +1,6 @@
-
 from enum import Enum
 import time
+import json
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -268,7 +268,7 @@ def main():
     t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
     alpha_values = list(map(lambda o: 2**o, t))
     
-    species_alpha = [o for o in alpha_values for i in range(5)]
+    species_alpha = [o for o in alpha_values for i in range(200)]
     
 
     grid = Field(
@@ -280,7 +280,11 @@ def main():
         d=5,               
         L_av=20            
     )
-
+    with open("test.json", "w+") as f:
+        d = dict()
+        for key in grid.points.keys():
+            d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
+        json.dump(d, f)
     r_min = 0.1
     r_max = 10.0   # limit to half of L_av 
     num_bins = 15 
@@ -304,6 +308,7 @@ def main():
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.tight_layout()
+    plt.savefig("spatial_correlation.png")
     plt.show()
 
     # plot species distribution (first 5 species)
@@ -324,6 +329,7 @@ def main():
     plt.axis('equal') 
     plt.legend(loc='upper right')
     plt.grid(True, alpha=0.3)
+    plt.savefig("species_distribution.png")
     plt.show()
 
     # plot Species-Area Relationshipw
@@ -348,6 +354,7 @@ def main():
     plt.title("Species-Area Relationship (SAR)")
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.legend()
+    plt.savefig("sar.png")
     plt.show()
 
 
