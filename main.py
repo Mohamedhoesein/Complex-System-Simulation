@@ -1,5 +1,4 @@
 from enum import Enum
-import time
 import json
 
 from matplotlib.pylab import norm
@@ -115,7 +114,6 @@ class Field:
 
         l = self.l
 
-        t = time.time()
         for n in range(1, self.m+1):
             l /= 2
 
