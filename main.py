@@ -1,9 +1,7 @@
 from enum import Enum
 import json
-
-from matplotlib.pylab import norm
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import patches, pyplot as plt
 from scipy.stats import norm
 from scipy import stats
 from sklearn.neighbors import KDTree
@@ -112,11 +110,11 @@ class Field:
         y = np.array([r0.y])
         thetas = np.array([theta0])
 
-        ls = np.linspace(self.l, 1, self.m)
-
+        #ls = np.linspace(self.l, 1, self.m)
+        l0 = self.l
         for n in range(1, self.m+1):
-            l = ls[n-1]
-
+            #l = ls[n-1]
+            l = l0*1.5**(-(n-1))
             delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
 
             point_count = len(x)
@@ -268,32 +266,32 @@ class Field:
                 grouped_results[float(target_alpha)] = None
                 
         return grouped_results
-
-def main():
-    t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
-    alpha_values = list(map(lambda o: 2**o, t))
-    # alpha_values = np.linspace(0.68, 0.82, 5)[::-1]
-    # alpha_values = [0.72,0.76,0.8]
-    species_alpha = [o for o in alpha_values for i in range(10)]
     
 
+def main():
+    t = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.55, -0.65]
+    alpha_values = list(map(lambda o: 2**o, t))
+    #alpha_values = np.linspace(0.60, 0.97, 5)[::-1]
+    # alpha_values = [0.72,0.76,0.8]
+    species_alpha = [o for o in alpha_values for i in range(100)]
+    
     grid = Field(
-    species_alpha=species_alpha,   # alphas around 0.7–0.8
-    m=18,
-    l=120,
-    delta0=0.05,
-    delta_diff=6,
-    d=2,
-    L_av=80)
+    species_alpha=species_alpha,   
+    m=14,
+    l=20,
+    delta0=0.1,
+    delta_diff=8,
+    d=15,
+    L_av=20)
 
     with open("test.json", "w+") as f:
         d = dict()
         for key in grid.points.keys():
             d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
         json.dump(d, f)
-    r_min = 0.5 * grid.l / grid.m
-    r_max = 0.3 * grid.L_av
-
+    
+    r_min = 0.5
+    r_max = 15
     num_bins = 30 
     R_values = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
 
@@ -320,15 +318,33 @@ def main():
     # plot species distribution (first 5 species)
     plt.figure(figsize=(10, 10))
     colors = plt.cm.jet(np.linspace(0, 1, 5))
-    for key in grid.points.keys():
-        k = key.split("-")[0]
-        for i in range(5):
-            species = grid.points[f"{k}-{i}"]
+
+    unique_alphas = sorted(list(set([key.split("-")[0] for key in grid.points.keys()])))
+    alpha_index= -1 #len(unique_alphas) // 2 # here middle alpha
+    alpha = unique_alphas[alpha_index]
+    
+    for i in range(5):
+        species_key = f"{alpha}-{i}"
+        if species_key in grid.points:
+            species = grid.points[species_key]
             xs = [p.x for p in species]
             ys = [p.y for p in species]
             plt.scatter(xs, ys, s=2, alpha=0.6, label=f'Species {i}', color=colors[i])
-        break
 
+    # omega box
+    omega_range = grid.omega_range
+    rect = patches.Rectangle(
+        (-omega_range, -omega_range),  
+        2 * omega_range,                # width
+        2 * omega_range,                # height
+        linewidth=2,
+        edgecolor='red',
+        facecolor='none',
+        linestyle='--',
+        label=f'Omega region ($L_{{av}}={grid.L_av}$)'
+    )
+    ax = plt.gca()
+    ax.add_patch(rect)
     plt.title(f"Species Distribution (First 10 Species)\nWindow Size $L_{{av}}={grid.L_av}$")
     plt.xlabel("X")
     plt.ylabel("Y ")
@@ -398,8 +414,8 @@ def main():
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.savefig("lognormal_distribution.png")
+    plt.show()
 
 if __name__ == "__main__":
     main()
 
-# %%
