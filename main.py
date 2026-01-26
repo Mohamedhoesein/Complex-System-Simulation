@@ -78,15 +78,6 @@ class Field:
         self.points = []
         for alpha in self.species_alpha:
             self.points.append(self.generate_species(alpha)) # list of list for each alpha
-            # cx = np.random.uniform(-self.omega_range, self.omega_range)
-            # cy = np.random.uniform(-self.omega_range, self.omega_range)
-
-            # species = self.generate_species(alpha)
-            # for p in species:
-            #     p.x += cx
-            #     p.y += cy
-
-            # self.points.append(species)
             
         self.L_av = L_av
         self.omega_range = L_av / 2
