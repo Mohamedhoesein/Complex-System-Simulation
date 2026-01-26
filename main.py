@@ -112,10 +112,10 @@ class Field:
         y = np.array([r0.y])
         thetas = np.array([theta0])
 
-        l = self.l
+        ls = np.linspace(self.l, 1, self.m)
 
         for n in range(1, self.m+1):
-            l /= 2
+            l = ls[n-1]
 
             delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
 
@@ -169,8 +169,12 @@ class Field:
         S_C = np.zeros_like(R_values, dtype=float)
         
         # generate n sample points in omega
-        sample_x = np.random.uniform(-self.omega_range, self.omega_range, n_samples)
-        sample_y = np.random.uniform(-self.omega_range, self.omega_range, n_samples)
+        max_R = R_values.max()
+        sample_x = np.random.uniform(-self.omega_range + max_R,
+                                    self.omega_range - max_R, n_samples)
+        sample_y = np.random.uniform(-self.omega_range + max_R,
+                                    self.omega_range - max_R, n_samples)
+
         sample_points = np.column_stack([sample_x, sample_y])
         
         for species in self.points.values(): # dictionary
@@ -268,25 +272,28 @@ class Field:
 def main():
     t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
     alpha_values = list(map(lambda o: 2**o, t))
-    # alpha_values = np.linspace(0.55, 0.90, 6)[::-1]
+    # alpha_values = np.linspace(0.68, 0.82, 5)[::-1]
+    # alpha_values = [0.72,0.76,0.8]
     species_alpha = [o for o in alpha_values for i in range(10)]
     
+
     grid = Field(
-        species_alpha=species_alpha,
-        m=14,
-        l=10,     # force fractal structure inside the window 
-        delta0=0.1,        
-        delta_diff=8,      
-        d=5,               
-        L_av=20            
-    )
+    species_alpha=species_alpha,   # alphas around 0.7–0.8
+    m=18,
+    l=120,
+    delta0=0.05,
+    delta_diff=6,
+    d=2,
+    L_av=80)
+
     with open("test.json", "w+") as f:
         d = dict()
         for key in grid.points.keys():
             d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
         json.dump(d, f)
-    r_min = 0.1
-    r_max = grid.L_av / 2   # limit to half of L_av 
+    r_min = 0.5 * grid.l / grid.m
+    r_max = 0.3 * grid.L_av
+
     num_bins = 30 
     R_values = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
 
@@ -338,7 +345,8 @@ def main():
     
     log_A = np.log10(A_values)
     log_S = np.log10(S_values)
-    slope, intercept, r_value, p_value, std_err = stats.linregress(log_A, log_S)
+    size = int(len(log_S))
+    slope, intercept, r_value, p_value, std_err = stats.linregress(log_A[:size], log_S[:size])
     # obtained power law 
     plt.figure(figsize=(8, 6))
     plt.loglog(A_values, S_values, 'o', 
