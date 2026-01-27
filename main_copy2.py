@@ -1,9 +1,8 @@
+
 from enum import Enum
-import json
+
 import numpy as np
-from matplotlib import patches, pyplot as plt
-from scipy.stats import norm
-from scipy import stats
+from matplotlib import pyplot as plt
 from sklearn.neighbors import KDTree
 
 class Branch(Enum):
@@ -76,16 +75,9 @@ class Field:
         self.delta0 = delta0
         self.delta_diff = delta_diff
         self.d = d
-        self.points = dict()
-        previous_alpha = 0
-        count = 0
+        self.points = []
         for alpha in self.species_alpha:
-            if previous_alpha == alpha:
-                count += 1
-            else:
-                previous_alpha = alpha
-                count = 0
-            self.points[f"{alpha}-{count}"] = self.generate_species(alpha) # (alpha, species index): [list of individuals]
+            self.points.append(self.generate_species(alpha)) # list of list for each alpha
         
         self.L_av = L_av
         self.omega_range = L_av / 2
@@ -99,40 +91,44 @@ class Field:
         :return: The set of individuals for the current species.
         :rtype: list[Individual]
         """
-        branch_options = [Branch.LEFT, Branch.RIGHT, Branch.BOTH]
         p = [1-alpha, 1-alpha, 2*alpha-1]
 
         # initial point
         theta0 = np.random.uniform(0, 2*np.pi)
 
         r0 = self.get_initial_point()
-        x = np.array([r0.x])
-        y = np.array([r0.y])
-        thetas = np.array([theta0])
+        points = [Individual(r0.x, r0.y, theta0)]
 
-        #ls = np.linspace(self.l, 1, self.m)
-        l0 = self.l
+        l = self.l
+
         for n in range(1, self.m+1):
-            #l = ls[n-1]
-            l = l0*1.5**(-(n-1))
+            l /= 2
+            new_points = []
+
             delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
 
-            point_count = len(x)
+            for p0 in points:
+                delta = np.random.uniform(-delta_max, delta_max)
+                theta = p0.theta + np.pi/2 + delta
 
-            deltas = np.random.uniform(-delta_max, delta_max, point_count)
-            new_thetas = thetas + deltas + np.pi/2
-            branches = np.random.choice(branch_options, p=p, size=point_count)
-            left = (branches == Branch.LEFT) | (branches == Branch.BOTH)
-            right = (branches == Branch.RIGHT) | (branches == Branch.BOTH)
-            left_x = x[left] + l*np.cos(new_thetas[left])
-            left_y = y[left] + l*np.sin(new_thetas[left])
-            right_x = x[right] + l*np.cos(new_thetas[right] + np.pi)
-            right_y = y[right] + l*np.sin(new_thetas[right] + np.pi)
-            x = np.concatenate([left_x, right_x])
-            y = np.concatenate([left_y, right_y])
-            thetas = np.concatenate([new_thetas[left], new_thetas[right]])
+                branch = np.random.choice([Branch.LEFT, Branch.RIGHT, Branch.BOTH], p=p)
 
-        return list(map(lambda x: Individual(x[0], x[1], x[2]), np.stack([x, y, thetas], axis=-1)))
+                if branch in (Branch.LEFT, Branch.BOTH):
+                    new_points.append(
+                        Individual(p0.x + l*np.cos(theta),
+                                p0.y + l*np.sin(theta),
+                                theta)
+                    )
+                if branch in (Branch.RIGHT, Branch.BOTH):
+                    new_points.append(
+                        Individual(p0.x + l*np.cos(theta + np.pi),
+                                p0.y + l*np.sin(theta + np.pi),
+                                theta + np.pi)
+                    )
+
+            points = new_points
+
+        return points
 
     def get_initial_point(self) -> Individual:
         """
@@ -152,6 +148,49 @@ class Field:
             0
         )
     
+    def f(self, species: list[Individual], r: float) -> float:
+        # Old function for F(r), not used
+        if len(species) < 2:
+            return 0.0
+        coords = np.array([[p.x, p.y] for p in species])
+        dx = coords[:, None, 0] - coords[None, :, 0]
+        dy = coords[:, None, 1] - coords[None, :, 1]
+        dists = np.sqrt(dx**2 + dy**2)
+        # exclude self-distances
+        dists = dists[dists > 0]
+        cummulator = np.sum(dists <= r)
+        area = np.pi * r**2
+        return cummulator / area  
+
+    def restriction_box(self, species: list[Individual], L: float, origin) -> list[Individual]:
+        # Old function, not used
+        x_0, y_0 = origin
+        half = L / 2
+        coords = np.array([[p.x, p.y] for p in species])
+        
+        mask =  (coords[:,0] >= x_0-half) & (coords[:,0] <= x_0+half) & \
+                (coords[:,1] >= y_0-half) & (coords[:,1] <= y_0+half)
+        return [species[i] for i in range(len(species)) if mask[i]]  
+    
+    def s(self, r: float, L: float, origin=(0.0, 0.0)) -> float:
+        # Old function for SAR, not used
+        """
+        Imeplementation of the SAR satistic.
+        
+        :param r: The radius to use for the statistic.
+        :type r: float
+        :return: The SAR statistic of all species.
+        :rtype: float
+        """
+        cummulator = 0
+        for species in self.points:
+            restricted_area = self.restriction_box(species, L, origin)
+            if len(restricted_area) > 1:
+                cummulator += self.f(restricted_area, r)
+            elif len(restricted_area) == 1:
+                cummulator += 1
+        return cummulator    
+
     def species_area_curve(self, R_values: np.ndarray, n_samples: int = 1000) -> np.ndarray:    # optimized   
         """
         Compute Species Area Relationship S_C(R).
@@ -167,15 +206,11 @@ class Field:
         S_C = np.zeros_like(R_values, dtype=float)
         
         # generate n sample points in omega
-        max_R = R_values.max()
-        sample_x = np.random.uniform(-self.omega_range + max_R,
-                                    self.omega_range - max_R, n_samples)
-        sample_y = np.random.uniform(-self.omega_range + max_R,
-                                    self.omega_range - max_R, n_samples)
-
+        sample_x = np.random.uniform(-self.omega_range, self.omega_range, n_samples)
+        sample_y = np.random.uniform(-self.omega_range, self.omega_range, n_samples)
         sample_points = np.column_stack([sample_x, sample_y])
         
-        for species in self.points.values(): # dictionary
+        for species in self.points: # list of list
             if len(species) == 0:
                 continue
 
@@ -197,9 +232,9 @@ class Field:
             
         return S_C
     
-    def compute_correlation_function(self, species: dict, r_bins: np.ndarray) -> np.ndarray:
+    def compute_correlation_function(self, species: list[Individual], r_bins: np.ndarray) -> np.ndarray:
         # consider points within omega
-        points_in_omega = [p for p in species
+        points_in_omega = [p for p in species 
                            if -self.omega_range <= p.x <= self.omega_range 
                            and -self.omega_range <= p.y <= self.omega_range]
         
@@ -244,16 +279,17 @@ class Field:
         :rtype: dict
         """
         grouped_results = {}
-        unique_alphas = list(set(map(lambda key: key.split("-")[0], self.points.keys()))) #sorted(list(set(self.species_alpha)))
+        unique_alphas = sorted(list(set(self.species_alpha)))
         # for each alpha
         for target_alpha in unique_alphas:
             
             current_alpha_correlations = []
             
             # associate alpha with its species points
-            for alpha_val in self.points.keys():
-                if alpha_val.split("-")[0] == target_alpha:
-                    rho = self.compute_correlation_function(self.points[alpha_val], r_bins)
+            for alpha_val, species_points in zip(self.species_alpha, self.points):
+                # if this species belongs to the alpha we are currently analyzing
+                if alpha_val == target_alpha:
+                    rho = self.compute_correlation_function(species_points, r_bins)
                     # add valid results
                     if np.sum(rho) > 0: 
                         current_alpha_correlations.append(rho)
@@ -261,47 +297,42 @@ class Field:
             # compute average correlation for this group
             if len(current_alpha_correlations) > 0:
                 avg_rho = np.mean(current_alpha_correlations, axis=0)
-                grouped_results[float(target_alpha)] = avg_rho
+                grouped_results[target_alpha] = avg_rho
             else:
-                grouped_results[float(target_alpha)] = None
+                grouped_results[target_alpha] = None
                 
         return grouped_results
-    
 
 def main():
-    t = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.55, -0.65]
+    t = [-0.01, -0.03, -0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.40, -0.50, -0.60, -0.65]
     alpha_values = list(map(lambda o: 2**o, t))
-    #alpha_values = np.linspace(0.60, 0.97, 5)[::-1]
-    # alpha_values = [0.72,0.76,0.8]
-    species_alpha = [o for o in alpha_values for i in range(100)]
     
-    grid = Field(
-    species_alpha=species_alpha,   
-    m=14,
-    l=20,
-    delta0=0.1,
-    delta_diff=8,
-    d=15,
-    L_av=20)
+    species_alpha = [o for o in alpha_values for i in range(5)]
+    
 
-    with open("test.json", "w+") as f:
-        d = dict()
-        for key in grid.points.keys():
-            d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
-        json.dump(d, f)
-    
-    r_min = 0.5
-    r_max = 15
-    num_bins = 30 
-    R_values = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
+    grid = Field(
+        species_alpha=species_alpha,
+        m=14,
+        l=10,     # force fractal structure inside the window 
+        delta0=0.1,        
+        delta_diff=8,      
+        d=5,               
+        L_av=20            
+    )
+
+    r_min = 0.1
+    r_max = 10.0   # limit to half of L_av 
+    num_bins = 15 
+
+    r_bins = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
 
     # plot correlation functions
-    results_corr_dict = grid.get_correlations_grouped_by_alpha(R_values)
+    results_corr_dict = grid.get_correlations_grouped_by_alpha(r_bins)
 
     plt.figure(figsize=(8, 6))
     for alpha, rho_avg in results_corr_dict.items():
         if rho_avg is not None:
-            r_centers = (R_values[:-1] + R_values[1:]) / 2
+            r_centers = (r_bins[:-1] + r_bins[1:]) / 2
             plt.plot(r_centers, rho_avg, marker='o', label=f'Alpha: {alpha:.3f}')
     
     plt.xscale('log')
@@ -312,110 +343,49 @@ def main():
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.tight_layout()
-    plt.savefig("spatial_correlation.png")
     plt.show()
 
     # plot species distribution (first 5 species)
     plt.figure(figsize=(10, 10))
     colors = plt.cm.jet(np.linspace(0, 1, 5))
-
-    unique_alphas = sorted(list(set([key.split("-")[0] for key in grid.points.keys()])))
-    alpha_index= -1 #len(unique_alphas) // 2 # here middle alpha
-    alpha = unique_alphas[alpha_index]
-    
     for i in range(5):
-        species_key = f"{alpha}-{i}"
-        if species_key in grid.points:
-            species = grid.points[species_key]
-            xs = [p.x for p in species]
-            ys = [p.y for p in species]
-            plt.scatter(xs, ys, s=2, alpha=0.6, label=f'Species {i}', color=colors[i])
+        species = grid.points[i]
+        xs = [p.x for p in species]
+        ys = [p.y for p in species]  
+        plt.scatter(xs, ys, s=2, alpha=0.6, label=f'Species {i}', color=colors[i])
 
-    # omega box
-    omega_range = grid.omega_range
-    rect = patches.Rectangle(
-        (-omega_range, -omega_range),  
-        2 * omega_range,                # width
-        2 * omega_range,                # height
-        linewidth=2,
-        edgecolor='red',
-        facecolor='none',
-        linestyle='--',
-        label=f'Omega region ($L_{{av}}={grid.L_av}$)'
-    )
-    ax = plt.gca()
-    ax.add_patch(rect)
     plt.title(f"Species Distribution (First 10 Species)\nWindow Size $L_{{av}}={grid.L_av}$")
     plt.xlabel("X")
     plt.ylabel("Y ")
     plt.axis('equal') 
     plt.legend(loc='upper right')
     plt.grid(True, alpha=0.3)
-    plt.savefig("species_distribution.png")
     plt.show()
 
-    # plot Species-Area Relationship
+    # plot Species-Area Relationshipw
+    n_steps = 30
+    R_values = np.logspace(np.log10(r_min), np.log10(r_max), n_steps)
+    
     S_values = grid.species_area_curve(R_values, n_samples=2000)
     # get area from radius
-    A_values = np.pi * (R_values ** 2)
-    
-    log_A = np.log10(A_values)
-    log_S = np.log10(S_values)
-    size = int(len(log_S))
-    slope, intercept, r_value, p_value, std_err = stats.linregress(log_A[:size], log_S[:size])
-    # obtained power law 
+    Area_values = np.pi * (R_values ** 2)
     plt.figure(figsize=(8, 6))
-    plt.loglog(A_values, S_values, 'o', 
-               color='black', markersize=5, label='Simulated data')
-    # fit line for slope
-    fit_line = 10**intercept * A_values**slope
-    plt.loglog(A_values, fit_line, 'r--', linewidth=2,
-               label=f'Power-law fit: z={slope:.3f}')
+    plt.loglog(Area_values, S_values, 'o-', color='black', markersize=5, linewidth=1.5)
     
+    # Add reference slope line
+    mid_idx = len(Area_values) // 2
+    ref_slope = 0.25 # to be adjusted
+    ref_y = S_values[mid_idx] * (Area_values / Area_values[mid_idx])**ref_slope
+    
+    plt.loglog(Area_values, ref_y, 'r--', label='Ref Slope z=0.25', alpha=0.5)
+
     plt.xlabel(r"Sampling Area $A$ ($A = \pi R^2$)")
     plt.ylabel(r"Number of Species $S_C(A)$")
     plt.title("Species-Area Relationship (SAR)")
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.legend()
-    plt.savefig("sar.png")
     plt.show()
 
-    # plot lognormal distribution of abundance
-    plt.figure(figsize=(8, 6))
-    # get abundances
-    abundances = np.array([len(species) for species in grid.points.values()])
-    abundances = abundances[abundances > 0]
-    # octave bins
-    max_abundance = max(abundances)
-    num_octaves = int(np.ceil(np.log2(max_abundance))) + 1
-    bins = [2**i for i in range(num_octaves + 1)]
-    
-    counts, bin_edges = np.histogram(abundances, bins=bins)
-    fractions = counts / counts.sum()
-    octave_centers = np.log2(np.sqrt(bin_edges[:-1] * bin_edges[1:]))
-    
-    # fit lognormal distribution
-    log2_abundances = np.log2(abundances)
-    mu_log2 = log2_abundances.mean()
-    sigma_log2 = log2_abundances.std()
-    x_log2 = np.linspace(log2_abundances.min() - 1, log2_abundances.max() + 1, 200)
-    normal_pdf = norm.pdf(x_log2, mu_log2, sigma_log2)
-    bin_width = np.mean(np.diff(octave_centers)) if len(octave_centers) > 1 else 1.0
-    normal_pdf_scaled = normal_pdf * bin_width
-
-    plt.bar(octave_centers, fractions, width=1,
-            alpha=0.7, color='skyblue', edgecolor='black', 
-            label='Simulated SAD')
-    plt.plot(x_log2, normal_pdf_scaled, 'r-', linewidth=2,
-             label=f'Lognormal fit')
-    plt.xlabel('log₂(Abundance) [octaves]', fontsize=12)
-    plt.ylabel('Fraction of species', fontsize=12)
-    plt.title('Species Abundance Distribution', fontsize=14)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.savefig("lognormal_distribution.png")
-    plt.show()
 
 if __name__ == "__main__":
     main()
-
