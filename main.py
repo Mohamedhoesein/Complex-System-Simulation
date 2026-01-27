@@ -312,6 +312,8 @@ class Field:
     
 
 def main():
+    np.random.seed(0)
+
     t = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.55, -0.65]
     alpha_values = list(map(lambda o: 2**o, t))
     #alpha_values = np.linspace(0.60, 0.97, 5)[::-1]
