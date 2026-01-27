@@ -152,6 +152,49 @@ class Field:
             0
         )
     
+    # def f(self, species: list[Individual], r: float) -> float:
+    #     # Old function for F(r), not used
+    #     if len(species) < 2:
+    #         return 0.0
+    #     coords = np.array([[p.x, p.y] for p in species])
+    #     dx = coords[:, None, 0] - coords[None, :, 0]
+    #     dy = coords[:, None, 1] - coords[None, :, 1]
+    #     dists = np.sqrt(dx**2 + dy**2)
+    #     # exclude self-distances
+    #     dists = dists[dists > 0]
+    #     cummulator = np.sum(dists <= r)
+    #     area = np.pi * r**2
+    #     return cummulator / area  
+
+    # def restriction_box(self, species: list[Individual], L: float, origin) -> list[Individual]:
+    #     # Old function, not used
+    #     x_0, y_0 = origin
+    #     half = L / 2
+    #     coords = np.array([[p.x, p.y] for p in species])
+        
+    #     mask =  (coords[:,0] >= x_0-half) & (coords[:,0] <= x_0+half) & \
+    #             (coords[:,1] >= y_0-half) & (coords[:,1] <= y_0+half)
+    #     return [species[i] for i in range(len(species)) if mask[i]]  
+    
+    # def s(self, r: float, L: float, origin=(0.0, 0.0)) -> float:
+    #     # Old function for SAR, not used
+    #     """
+    #     Imeplementation of the SAR satistic.
+        
+    #     :param r: The radius to use for the statistic.
+    #     :type r: float
+    #     :return: The SAR statistic of all species.
+    #     :rtype: float
+    #     """
+    #     cummulator = 0
+    #     for species in self.points:
+    #         restricted_area = self.restriction_box(species, L, origin)
+    #         if len(restricted_area) > 1:
+    #             cummulator += self.f(restricted_area, r)
+    #         elif len(restricted_area) == 1:
+    #             cummulator += 1
+    #     return cummulator    
+
     def species_area_curve(self, R_values: np.ndarray, n_samples: int = 1000) -> np.ndarray:    # optimized   
         """
         Compute Species Area Relationship S_C(R).
