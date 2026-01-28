@@ -8,6 +8,7 @@ from scipy.stats import norm
 from scipy import stats
 
 from main import Branch, Individual, Field
+from plots import rcCustom, rcCustom_wide
 
 n_alpha = 10
 n_species_alpha = 10
@@ -55,8 +56,10 @@ number_of_individuals = [len(species) for species in grid.points.values()]
 
 for i in range(len(species)):
     print(f"Species {i} with alpha={round(species_alpha[i], 3)} has {number_of_individuals[i]} individuals.")
-plt.figure(figsize=(10, 10))
-colors = plt.cm.jet(np.linspace(0, 1, 5))
+
+with plt.rc_context(rc=rcCustom):
+    plt.figure(figsize=(10, 10))
+    colors = plt.cm.jet(np.linspace(0, 1, 5))
 
 unique_alphas = sorted(list(set([key.split("-")[0] for key in grid.points.keys()])))
 alpha_index= -1 #len(unique_alphas) // 2 # here middle alpha
@@ -157,19 +160,20 @@ for j in range(len(critical_abundance)):
     q_array[j] = q
     extinction_prob_array[j] = extinction_probabilities
 
-plt.figure()
+with plt.rc_context(rc=rcCustom):
+    plt.figure()
 
-for i in range(len(critical_abundance)):
-    plt.plot(A_values[:-1], extinction_prob_array[i], 'o-', label=fr'$n_c$ = {critical_abundance[i]}', markersize=3)
+    for i in range(len(critical_abundance)):
+        plt.plot(A_values[:-1], extinction_prob_array[i], 'o-', label=fr'$n_c$ = {critical_abundance[i]}', markersize=3)
 
-plt.legend()
-plt.xlabel("Area")
-plt.ylabel("Extinction Probability")
-plt.grid(True)
-plt.yscale('log')
-plt.xscale('log')
-plt.title(fr"Extinction probability for $n_0 = {n_individuals}$")
-plt.show()
+    plt.legend()
+    plt.xlabel("Area")
+    plt.ylabel("Extinction Probability")
+    plt.grid(True)
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.title(fr"Extinction probability for $n_0 = {n_individuals}$")
+    plt.show()
 
 critical_abundance = 100
 q_array = []
@@ -194,33 +198,35 @@ for j in range(n_species):
     q_array.append(q)
     extinction_prob_array.append(extinction_probabilities)
 
-plt.figure()
+with plt.rc_context(rc=rcCustom):
+    plt.figure()
 
-for i in range(len(extinction_prob_array)):
-    plt.plot(A_values[:-1], extinction_prob_array[i], 'o-', label=fr'$\alpha$ = {round(species_alpha[i], 2)}, $n_0$ = {number_of_individuals[i]}', markersize=3)
+    for i in range(len(extinction_prob_array)):
+        plt.plot(A_values[:-1], extinction_prob_array[i], 'o-', label=fr'$\alpha$ = {round(species_alpha[i], 2)}, $n_0$ = {number_of_individuals[i]}', markersize=3)
 
-plt.xlabel("Area")
-plt.ylabel("Extinction Probability")
-plt.grid(True)
-plt.yscale('log')
-plt.xscale('log')
-plt.title(fr"Extinction probability, for $n_c = {critical_abundance}$")
-plt.show()
+    plt.xlabel("Area")
+    plt.ylabel("Extinction Probability")
+    plt.grid(True)
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.title(fr"Extinction probability, for $n_c = {critical_abundance}$")
+    plt.show()
 
 alpha = species_alpha[50]
 mask = [i for i in range(len(species_alpha)) if species_alpha[i] == alpha]
 extinction_prob_array_alpha = [extinction_prob_array[i] for i in mask]
 
-plt.figure()
+with plt.rc_context(rc=rcCustom):
+    plt.figure()
 
-for i in range(len(extinction_prob_array_alpha)):
-    plt.plot(A_values[:-1], extinction_prob_array_alpha[i], 'o-', label=fr'$n_0$ = {number_of_individuals[mask[i]]}', markersize=3)
+    for i in range(len(extinction_prob_array_alpha)):
+        plt.plot(A_values[:-1], extinction_prob_array_alpha[i], 'o-', label=fr'$n_0$ = {number_of_individuals[mask[i]]}', markersize=3)
 
-plt.legend()
-plt.xlabel("Area")
-plt.ylabel("Extinction Probability")
-plt.grid(True)
-plt.yscale('log')
-plt.xscale('log')
-plt.title(fr"Extinction probability, for $n_c = {critical_abundance}$ and $\alpha = {round(alpha, 2)}$")
-plt.show()
+    plt.legend()
+    plt.xlabel("Area")
+    plt.ylabel("Extinction Probability")
+    plt.grid(True)
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.title(fr"Extinction probability, for $n_c = {critical_abundance}$ and $\alpha = {round(alpha, 2)}$")
+    plt.show()
