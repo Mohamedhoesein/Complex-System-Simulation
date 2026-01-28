@@ -2,9 +2,12 @@ from enum import Enum
 import json
 import numpy as np
 from matplotlib import patches, pyplot as plt
-from scipy.stats import norm
+from scipy.stats import norm, kstest
 from scipy import stats
 from sklearn.neighbors import KDTree
+from plots import rcCustom, rcCustom_wide
+
+
 
 class Branch(Enum):
     """
@@ -114,7 +117,7 @@ class Field:
         l0 = self.l
         for n in range(1, self.m+1):
             #l = ls[n-1]
-            l = l0*1.5**(-(n-1))
+            l = l0*(1.5**(-(n-1)))
             delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
 
             point_count = len(x)
@@ -266,122 +269,119 @@ class Field:
                 grouped_results[float(target_alpha)] = None
                 
         return grouped_results
+#plotting code   
+def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray):
+    """
+    Plot spatial correlation functions with power-law fits.
+    """
+    sorted_alphas = sorted(results_corr_dict.keys())
     
+    with plt.rc_context(rc=rcCustom):
+        plt.figure()  
+        for alpha in sorted_alphas:
+            rho_avg = results_corr_dict[alpha]
+            if rho_avg is not None and np.sum(rho_avg) > 0:
+                r_centers = (R_values[:-1] + R_values[1:]) / 2
+                valid_indices = rho_avg > 0
+                if np.sum(valid_indices) > 2:  
+                    log_r = np.log10(r_centers[valid_indices])
+                    log_rho = np.log10(rho_avg[valid_indices])
+                    slope, intercept, r_value, p_value, std_err = stats.linregress(log_r, log_rho)
+                    r_squared = r_value**2
+                    plt.plot(r_centers, rho_avg, marker='o', linewidth=1.3,
+                            label=f'$\\alpha$={alpha:.2f}, z={slope:.2f}, $R^2$={r_squared:.2f}')
+                else:
+                    plt.plot(r_centers, rho_avg, marker='o', linewidth=1.3,
+                            label=f'$\\alpha$={alpha:.3f}')
 
-def main():
-    t = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.55, -0.65]
-    alpha_values = list(map(lambda o: 2**o, t))
-    #alpha_values = np.linspace(0.60, 0.97, 5)[::-1]
-    # alpha_values = [0.72,0.76,0.8]
-    species_alpha = [o for o in alpha_values for i in range(100)]
-    
-    grid = Field(
-    species_alpha=species_alpha,   
-    m=14,
-    l=20,
-    delta0=0.1,
-    delta_diff=8,
-    d=15,
-    L_av=20)
+        plt.xscale('log')
+        plt.yscale('log') 
+        plt.xlabel(r'Distance $r$ [a.u.]')
+        plt.ylabel(r'Correlation $\rho_s(r) / \rho_s(1)$')
+        plt.title('Spatial Correlation Functions')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("spatial_correlation.png")
+        plt.show()
 
-    with open("test.json", "w+") as f:
-        d = dict()
-        for key in grid.points.keys():
-            d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
-        json.dump(d, f)
-    
-    r_min = 0.5
-    r_max = 15
-    num_bins = 30 
-    R_values = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
-
-    # plot correlation functions
-    results_corr_dict = grid.get_correlations_grouped_by_alpha(R_values)
-
-    plt.figure(figsize=(8, 6))
-    for alpha, rho_avg in results_corr_dict.items():
-        if rho_avg is not None:
-            r_centers = (R_values[:-1] + R_values[1:]) / 2
-            plt.plot(r_centers, rho_avg, marker='o', label=f'Alpha: {alpha:.3f}')
-    
-    plt.xscale('log')
-    plt.yscale('log') 
-    plt.xlabel(r'Distance $r$')
-    plt.ylabel(r'Correlation $\rho_s(r) / \rho_s(1)$')
-    plt.title('Spatial Correlation (Log-Log)')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, which="both", ls="-", alpha=0.2)
-    plt.tight_layout()
-    plt.savefig("spatial_correlation.png")
-    plt.show()
-
-    # plot species distribution (first 5 species)
-    plt.figure(figsize=(10, 10))
-    colors = plt.cm.jet(np.linspace(0, 1, 5))
+def plot_species_distribution(grid: Field, num_species: int = 5):
+    """
+    Plot spatial distribution of species with omega region.
+    """
+    colors = plt.cm.jet(np.linspace(0, 1, num_species))
 
     unique_alphas = sorted(list(set([key.split("-")[0] for key in grid.points.keys()])))
-    alpha_index= -1 #len(unique_alphas) // 2 # here middle alpha
-    alpha = unique_alphas[alpha_index]
+    alpha_index = 4  # choose alpha index to plot
+    alpha = float(unique_alphas[alpha_index])
     
-    for i in range(5):
-        species_key = f"{alpha}-{i}"
-        if species_key in grid.points:
-            species = grid.points[species_key]
-            xs = [p.x for p in species]
-            ys = [p.y for p in species]
-            plt.scatter(xs, ys, s=2, alpha=0.6, label=f'Species {i}', color=colors[i])
+    with plt.rc_context(rc=rcCustom):
+        plt.figure()
+        
+        for i in range(num_species):
+            species_key = f"{alpha}-{i}"
+            if species_key in grid.points:
+                species = grid.points[species_key]
+                xs = [p.x for p in species]
+                ys = [p.y for p in species]
+                plt.scatter(xs, ys, s=2, alpha=0.6, label=f'Species {i}', color=colors[i])
 
-    # omega box
-    omega_range = grid.omega_range
-    rect = patches.Rectangle(
-        (-omega_range, -omega_range),  
-        2 * omega_range,                # width
-        2 * omega_range,                # height
-        linewidth=2,
-        edgecolor='red',
-        facecolor='none',
-        linestyle='--',
-        label=f'Omega region ($L_{{av}}={grid.L_av}$)'
-    )
-    ax = plt.gca()
-    ax.add_patch(rect)
-    plt.title(f"Species Distribution (First 10 Species)\nWindow Size $L_{{av}}={grid.L_av}$")
-    plt.xlabel("X")
-    plt.ylabel("Y ")
-    plt.axis('equal') 
-    plt.legend(loc='upper right')
-    plt.grid(True, alpha=0.3)
-    plt.savefig("species_distribution.png")
-    plt.show()
+        # omega box
+        omega_range = grid.omega_range
+        rect = patches.Rectangle(
+            (-omega_range, -omega_range),  
+            2 * omega_range,
+            2 * omega_range,
+            linewidth=1.5,
+            edgecolor='red',
+            facecolor='none',
+            linestyle='--',
+            label=f'$\\Omega$ region ($L_{{av}}={grid.L_av}$)'
+        )
+        ax = plt.gca()
+        ax.add_patch(rect)
+        
+        plt.title(f"Species Distribution ({num_species} Species, $\\alpha$={alpha:.2f})")
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("species_distribution.png")
+        plt.show()
 
-    # plot Species-Area Relationship
-    S_values = grid.species_area_curve(R_values, n_samples=2000)
-    # get area from radius
+def plot_sar(grid: Field, R_values: np.ndarray, n_samples: int = 2000):
+    """
+    Plot Species-Area Relationship with bootstrapped confidence intervals.
+    """
+    S_values = grid.species_area_curve(R_values, n_samples=n_samples)
     A_values = np.pi * (R_values ** 2)
     
     log_A = np.log10(A_values)
     log_S = np.log10(S_values)
-    size = int(len(log_S))
-    slope, intercept, r_value, p_value, std_err = stats.linregress(log_A[:size], log_S[:size])
-    # obtained power law 
-    plt.figure(figsize=(8, 6))
-    plt.loglog(A_values, S_values, 'o', 
-               color='black', markersize=5, label='Simulated data')
-    # fit line for slope
-    fit_line = 10**intercept * A_values**slope
-    plt.loglog(A_values, fit_line, 'r--', linewidth=2,
-               label=f'Power-law fit: z={slope:.3f}')
+    slope, intercept, r_value, p_value, std_err = stats.linregress(log_A, log_S)
+    r_squared = r_value**2
     
-    plt.xlabel(r"Sampling Area $A$ ($A = \pi R^2$)")
-    plt.ylabel(r"Number of Species $S_C(A)$")
-    plt.title("Species-Area Relationship (SAR)")
-    plt.grid(True, which="both", ls="-", alpha=0.2)
-    plt.legend()
-    plt.savefig("sar.png")
-    plt.show()
+    with plt.rc_context(rc=rcCustom):
+        plt.figure()
+        
+        plt.loglog(A_values, S_values, 'o', 
+                   color='black', markersize=5, label='Simulated data')
+        # fit line
+        fit_line = 10**intercept * A_values**slope
+        plt.loglog(A_values, fit_line, 'r--', linewidth=2,
+                   label=f'Power-law: $z={slope:.3f}$, $R^2={r_squared:.2f}$')
+        plt.xlabel(r"Area $A$ [a.u.]")
+        plt.ylabel(r"Number of Species $S_C(A)$")
+        plt.title("Species-Area Relationship (SAR)")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("sar.png")
 
-    # plot lognormal distribution of abundance
-    plt.figure(figsize=(8, 6))
+        plt.show()
+
+def plot_lognormal_distribution(grid: Field):
+    """
+    Plot species abundance distribution with lognormal fit.
+    """
     # get abundances
     abundances = np.array([len(species) for species in grid.points.values()])
     abundances = abundances[abundances > 0]
@@ -389,7 +389,6 @@ def main():
     max_abundance = max(abundances)
     num_octaves = int(np.ceil(np.log2(max_abundance))) + 1
     bins = [2**i for i in range(num_octaves + 1)]
-    
     counts, bin_edges = np.histogram(abundances, bins=bins)
     fractions = counts / counts.sum()
     octave_centers = np.log2(np.sqrt(bin_edges[:-1] * bin_edges[1:]))
@@ -402,19 +401,68 @@ def main():
     normal_pdf = norm.pdf(x_log2, mu_log2, sigma_log2)
     bin_width = np.mean(np.diff(octave_centers)) if len(octave_centers) > 1 else 1.0
     normal_pdf_scaled = normal_pdf * bin_width
+    
+    # goodness of fit (K-S test)
+    statistic, p_value = kstest(log2_abundances, 'norm', 
+                                args=(mu_log2, sigma_log2))
+    
+    with plt.rc_context(rc=rcCustom):
+        fig, ax = plt.subplots()  
+        ax.bar(octave_centers, fractions, width=1,
+                alpha=0.7, color="#5BD75B", 
+                label='Simulated SAD')
+        ax.plot(x_log2, normal_pdf_scaled, 'r-', linewidth=2,
+                 label=f'Lognormal fit ($\\mu$={mu_log2:.2f}, $\\sigma$={sigma_log2:.2f})')
+        
+        ax.set_xlabel('Abundance (octaves scaled)')
+        ax.set_ylabel('Fraction of species')
+        fig.suptitle("Species Abundance Distribution")
+        ax.set_title(f"(K-S test: p={p_value:.4f})", pad = 20)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig("lognormal_distribution.png")
+        plt.show()
 
-    plt.bar(octave_centers, fractions, width=1,
-            alpha=0.7, color='skyblue', edgecolor='black', 
-            label='Simulated SAD')
-    plt.plot(x_log2, normal_pdf_scaled, 'r-', linewidth=2,
-             label=f'Lognormal fit')
-    plt.xlabel('log₂(Abundance) [octaves]', fontsize=12)
-    plt.ylabel('Fraction of species', fontsize=12)
-    plt.title('Species Abundance Distribution', fontsize=14)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.savefig("lognormal_distribution.png")
-    plt.show()
+
+def main():
+    """Main simulation and analysis pipeline."""
+    np.random.seed(42)
+    #TODO: justify parameters
+    t = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.55, -0.65]
+    alpha_values = list(map(lambda o: 2**o, t))
+    species_alpha = [o for o in alpha_values for i in range(50)]
+    grid = Field(
+        species_alpha=species_alpha,   
+        m=14,
+        l=20,
+        delta0=0.1,
+        delta_diff=8,
+        d=15,
+        L_av=20
+    )
+
+    # Save species data
+    with open("test.json", "w+") as f:
+        d = dict()
+        for key in grid.points.keys():
+            d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
+        json.dump(d, f)
+
+    # radius range
+    r_min = 0.5
+    r_max = 15
+    num_bins = 30 
+    R_values = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
+    
+    results_corr_dict = grid.get_correlations_grouped_by_alpha(R_values)
+    plot_correlation_functions(results_corr_dict, R_values)
+    
+    plot_species_distribution(grid, num_species=5)
+    
+    plot_sar(grid, R_values, n_samples=2000)
+    
+    plot_lognormal_distribution(grid)
+    
 
 if __name__ == "__main__":
     main()
