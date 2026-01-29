@@ -60,17 +60,17 @@ number_of_individuals = [len(species) for species in grid.points.values()]
 for i in range(len(species)):
     print(f"Species {i} with alpha={round(species_alpha[i], 3)} has {number_of_individuals[i]} individuals.")
 
-def determine_q(q_try, fractional_area, n_indiv_init):
+def determine_q(a, b, fractional_area, n_indiv_init):
     """function to determine q by finding the root numerically, used when bisection method fails
 
     Args:
-        q_try (np.ndarray): array of q values to try
         fractional_area (float): fractional area loss, given by dividing the area after loss by the initial area
         n_indiv_init (int): initial number of individuals for a given species
 
     Returns:
         float: root of the function f(q)
     """ 
+    q_try = np.linspace(a, b, 1000000)
     lhs = fractional_area * n_indiv_init
     # lhs = np.full_like(q_try, lhs)
     rhs = (q_try / (1 - q_try)) - ((n_indiv_init + 1) * q_try ** (n_indiv_init + 1)) / (1 - q_try ** (n_indiv_init + 1))
@@ -115,8 +115,7 @@ def q_bisection(a, b, epsilon, fractional_area, n_indiv_init):
     # Check condition for bisection method
     if f_a * f_b > 0:
         print(f"Bisection method fails for initial species count {n_indiv_init}, using other method.")
-        q_try = np.linspace(0, 1.01, 1000000)
-        q = determine_q(q_try, fractional_area, n_indiv_init)
+        q = determine_q(a, b, fractional_area, n_indiv_init)
         return q
     
     # Middle point
