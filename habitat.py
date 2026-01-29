@@ -45,6 +45,11 @@ grid = Field(
     L_av=L_av
 )
 
+params_extinction = Extinction(
+    a=0,
+    b=1.01
+)
+
 # Set evaluation radii
 r_min = 0.5
 r_max = 15
@@ -64,9 +69,7 @@ for i in range(len(species)):
 n_individuals = 15000
 area_original = A_values[-1]
 
-# Bisection method parameters
-a = 0
-b = 1.01
+# Precision threshold for bisection method
 epsilon = 1e-6
 
 # Critical abundance values
@@ -84,9 +87,9 @@ for j in range(len(critical_abundance)):
     for i in range(0, len(A_values) - 1):
         area = A_values[i]
         fractional_area = area / area_original
-        q_value = Extinction.q_numeric(a, b, fractional_area, n_individuals)
+        q_value = params_extinction.q_numeric(fractional_area, n_individuals)
         q[i] = q_value
-        extinction_probabilities[i] = Extinction.extinction_probability(q = q_value,
+        extinction_probabilities[i] = params_extinction.extinction_probability(q = q_value,
                                                              n_c = critical_abundance[j],
                                                              n_0 = n_individuals)
     q_array[j] = q
@@ -125,10 +128,10 @@ for j in range(n_species):
     for i in range(0, len(A_values) - 1):
         area = A_values[i]
         fractional_area = area / area_original
-        q_value = Extinction.q_numeric(a, b, fractional_area, n_individuals)
+        q_value = params_extinction.q_numeric(fractional_area, n_individuals)
         q[i] = q_value
         # print(f"Area: {area}, Fractional Area: {fractional_area}, q: {q_value}")
-        extinction_probabilities[i] = Extinction.extinction_probability(q = q_value,
+        extinction_probabilities[i] = params_extinction.extinction_probability(q = q_value,
                                                              n_c = critical_abundance,
                                                              n_0 = n_individuals)
     
@@ -172,9 +175,9 @@ for j in range(len(mask)):
     for i in range(0, len(A_values) - 1):
         area = A_values[i]
         fractional_area = area / area_original
-        q_value = Extinction.q_numeric(a, b, fractional_area, n_individuals)
+        q_value = params_extinction.q_numeric(fractional_area, n_individuals)
         q[i] = q_value
-        extinction_probabilities[i] = Extinction.extinction_probability(q = q_value,
+        extinction_probabilities[i] = params_extinction.extinction_probability(q = q_value,
                                                              n_c = critical_abundance,
                                                              n_0 = n_individuals)
     q_array_alpha.append(q)
