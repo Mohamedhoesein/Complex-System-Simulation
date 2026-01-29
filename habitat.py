@@ -8,7 +8,7 @@ from scipy.stats import norm
 from scipy import stats
 
 # Used modules from other python files
-from main import Branch, Individual, Field
+from main import Branch, Individual, Field, Extinction
 from plots import rcCustom, rcCustom_wide
 
 # Seed for the random number generator to ensure reproducibility
@@ -60,92 +60,6 @@ number_of_individuals = [len(species) for species in grid.points.values()]
 for i in range(len(species)):
     print(f"Species {i} with alpha={round(species_alpha[i], 3)} has {number_of_individuals[i]} individuals.")
 
-def determine_q(a, b, fractional_area, n_indiv_init):
-    """function to determine q by finding the root numerically, used when bisection method fails
-
-    Args:
-        fractional_area (float): fractional area loss, given by dividing the area after loss by the initial area
-        n_indiv_init (int): initial number of individuals for a given species
-
-    Returns:
-        float: root of the function f(q)
-    """ 
-    q_try = np.linspace(a, b, 1000000)
-    lhs = fractional_area * n_indiv_init
-    rhs = (q_try / (1 - q_try)) - ((n_indiv_init + 1) * q_try ** (n_indiv_init + 1)) / (1 - q_try ** (n_indiv_init + 1))
-    root_find = lhs - rhs
-
-    y_closest = np.min(np.abs(root_find))
-    q_closest = q_try[np.argmin(np.abs(root_find))]
-
-    return q_closest
-
-def function(q, fractional_area, n_indiv_init):
-    """function that gives f(q) for a given value of q. 
-
-    Args:
-        q (float): constant between 0 and 1, used to determine the extinction probability
-        fractional_area (float): fractional area loss, given by dividing the area after loss by the initial area
-        n_indiv_init (int): initial number of individuals for a given species
-
-    Returns:
-        float: value of the function f(q), evaluated at a given q
-    """    
-    lhs = fractional_area * n_indiv_init
-    rhs = (q / (1 - q)) - ((n_indiv_init + 1) * q ** (n_indiv_init + 1)) / (1 - q ** (n_indiv_init + 1))
-    return lhs - rhs
-
-def q_bisection(a, b, epsilon, fractional_area, n_indiv_init):
-    """Root finding using the bisection method.
-
-    Args:
-        a (float): lower bound of the interval in which to search for the root
-        b (float): upper bound of the interval in which to search for the root
-        epsilon (float): tolerance for the root-finding algorithm
-        fractional_area (float): fractional area loss, given by dividing the area after loss by the initial area
-        n_indiv_init (int): initial number of individuals for a given species
-
-    Returns:
-        float: root of the function f(q) within the interval [a, b]
-    """    
-    f_a = function(a, fractional_area, n_indiv_init)
-    f_b = function(b, fractional_area, n_indiv_init)
-
-    # Check condition for bisection method
-    if f_a * f_b > 0:
-        print(f"Bisection method fails for initial species count {n_indiv_init}, using other method.")
-        q = determine_q(a, b, fractional_area, n_indiv_init)
-        return q
-    
-    # Middle point
-    c = (a + b) / 2.0
-    f_c = function(c, fractional_area, n_indiv_init)
-
-    while abs(f_c) > epsilon:
-        c = (a + b) / 2.0
-        f_c = function(c, fractional_area, n_indiv_init)
-        f_a = function(a, fractional_area, n_indiv_init)
-
-        if f_c * f_a < 0:
-            b = c
-        else:
-            a = c
-            
-    return c
-
-def extinction_probability(q, n_c, n_0):
-    """Determine extinction probability.
-
-    Args:
-        q (float): probability parameter
-        n_c (int): critical abundance, the number of individuals below which a species is considered ecologically extinct
-        n_0 (int): initial number of individuals
-
-    Returns:
-        float: extinction probability
-    """    
-    return (q ** (n_c + 1) - 1) / (q ** (n_0 + 1) - 1)
-
 # Number of individuals before habitat loss and original area
 n_individuals = 15000
 area_original = A_values[-1]
@@ -170,9 +84,9 @@ for j in range(len(critical_abundance)):
     for i in range(0, len(A_values) - 1):
         area = A_values[i]
         fractional_area = area / area_original
-        q_value = q_bisection(a, b, epsilon, fractional_area, n_individuals)
+        q_value = Extinction.q_numeric(a, b, fractional_area, n_individuals)
         q[i] = q_value
-        extinction_probabilities[i] = extinction_probability(q = q_value,
+        extinction_probabilities[i] = Extinction.extinction_probability(q = q_value,
                                                              n_c = critical_abundance[j],
                                                              n_0 = n_individuals)
     q_array[j] = q
@@ -211,10 +125,10 @@ for j in range(n_species):
     for i in range(0, len(A_values) - 1):
         area = A_values[i]
         fractional_area = area / area_original
-        q_value = q_bisection(a, b, epsilon, fractional_area, n_individuals)
+        q_value = Extinction.q_numeric(a, b, fractional_area, n_individuals)
         q[i] = q_value
         # print(f"Area: {area}, Fractional Area: {fractional_area}, q: {q_value}")
-        extinction_probabilities[i] = extinction_probability(q = q_value,
+        extinction_probabilities[i] = Extinction.extinction_probability(q = q_value,
                                                              n_c = critical_abundance,
                                                              n_0 = n_individuals)
     
@@ -258,9 +172,9 @@ for j in range(len(mask)):
     for i in range(0, len(A_values) - 1):
         area = A_values[i]
         fractional_area = area / area_original
-        q_value = q_bisection(a, b, epsilon, fractional_area, n_individuals)
+        q_value = Extinction.q_numeric(a, b, fractional_area, n_individuals)
         q[i] = q_value
-        extinction_probabilities[i] = extinction_probability(q = q_value,
+        extinction_probabilities[i] = Extinction.extinction_probability(q = q_value,
                                                              n_c = critical_abundance,
                                                              n_0 = n_individuals)
     q_array_alpha.append(q)
