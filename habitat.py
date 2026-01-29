@@ -1,15 +1,10 @@
 # Used packages
 import numpy as np
-from enum import Enum
-from sklearn.neighbors import KDTree
-import json
-from matplotlib import patches, pyplot as plt
-from scipy.stats import norm
-from scipy import stats
+import matplotlib.pyplot as plt
 
 # Used modules from other python files
-from main import Branch, Individual, Field, Extinction
-from plots import rcCustom, rcCustom_wide
+from main import Field, Extinction
+from plots import rcCustom
 
 # Seed for the random number generator to ensure reproducibility
 np.random.seed(3)
