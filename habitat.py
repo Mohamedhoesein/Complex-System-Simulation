@@ -72,7 +72,6 @@ def determine_q(a, b, fractional_area, n_indiv_init):
     """ 
     q_try = np.linspace(a, b, 1000000)
     lhs = fractional_area * n_indiv_init
-    # lhs = np.full_like(q_try, lhs)
     rhs = (q_try / (1 - q_try)) - ((n_indiv_init + 1) * q_try ** (n_indiv_init + 1)) / (1 - q_try ** (n_indiv_init + 1))
     root_find = lhs - rhs
 
