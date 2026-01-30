@@ -1,13 +1,14 @@
-from enum import Enum
-import json
 import numpy as np
 from matplotlib import patches, pyplot as plt
 from scipy.stats import norm, kstest
 from scipy import stats
-from sklearn.neighbors import KDTree
-from plots import rcCustom
 from scipy.optimize import curve_fit
 from scipy.spatial import cKDTree
+from sklearn.neighbors import KDTree
+
+from enum import Enum
+
+from plots import rcCustom
 
 
 
@@ -88,7 +89,7 @@ class Field:
         if comp_values is None:
             comp_values = [1.0] * len(species_alpha) # Initially no competition
 
-        self.points = dict()
+        self.points = {}
         previous_alpha = None
         count = 0
         species_id = 0  # global species counter
@@ -131,6 +132,7 @@ class Field:
         thetas = np.array([theta0])
 
         l0 = self.l
+        # Branch for a total of m times. We start at n=1 because n=0 is for the branch of the initial point.
         for n in range(1, self.m+1):
             l = l0 * 1.5**(-(n-1))
             delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
@@ -140,6 +142,7 @@ class Field:
             new_thetas = thetas + deltas + np.pi/2
             branches = np.random.choice(branch_options, p=p, size=point_count)
 
+            # Determine which nodes branch left, right or both.
             left = (branches == Branch.LEFT) | (branches == Branch.BOTH)
             right = (branches == Branch.RIGHT) | (branches == Branch.BOTH)
 
@@ -171,8 +174,8 @@ class Field:
             middle.y + offset*np.sin(radian),
             0
         )
-    
-    def species_area_curve(self, R_values: np.ndarray, n_samples: int = 1000) -> np.ndarray:    # optimized   
+
+    def species_area_curve(self, R_values: np.ndarray, n_samples: int = 1000) -> np.ndarray:
         """
         Compute Species Area Relationship S_C(R).
         
@@ -185,7 +188,7 @@ class Field:
         """
         # initialize the total sum array
         S_C = np.zeros_like(R_values, dtype=float)
-        
+
         # generate n sample points in omega
         max_R = R_values.max()
         sample_x = np.random.uniform(-self.omega_range + max_R,
@@ -194,7 +197,7 @@ class Field:
                                     self.omega_range - max_R, n_samples)
 
         sample_points = np.column_stack([sample_x, sample_y])
-        
+
         for species in self.points.values(): # dictionary
             if len(species) == 0:
                 continue
@@ -202,50 +205,60 @@ class Field:
             # find nearest neighbor distances using KDTree
             points = np.array([(p.x, p.y) for p in species])
             tree = KDTree(points)
-            
+
             # for each sample point, find distance to nearest individual of this species
             dists, _ = tree.query(sample_points)
             dists = dists.ravel()  # flatten to 1D array
             # count fraction where minimum distance <= R: proximity function (vectorized)
             proximity_matrix = dists[:, None] <= R_values[None, :]
-            
+
             # average over samples to get Fs(R) for this species
             Fs_R = np.mean(proximity_matrix, axis=0)
-            
+
             # add this species' contribution to the total
             S_C += Fs_R
-            
+
         return S_C
-    
+
     def compute_correlation_function(self, species: dict, r_bins: np.ndarray) -> np.ndarray:
+        """
+        Compute the correctaltion for all given species, by using the given bins for r.
+
+        :param species: The species for which to calculate the correlation.
+        :type species: dict
+        :param r_bins: The bins for the radii.
+        :type r_bins: np.ndarray
+        :return: The correlation for each radii.
+        :rtype: ndarray
+        """
         # consider points within omega
         points_in_omega = [p for p in species
                            if -self.omega_range <= p.x <= self.omega_range 
                            and -self.omega_range <= p.y <= self.omega_range]
-        
+
         if len(points_in_omega) < 2:
             return np.zeros(len(r_bins) - 1)
-        
+
         # calculate distances between all pairs
         points_array = np.array([(p.x, p.y) for p in points_in_omega])
         n = len(points_array)
         dx = points_array[:, None, 0] - points_array[None, :, 0]
         dy = points_array[:, None, 1] - points_array[None, :, 1]
         dist_matrix = np.sqrt(dx**2 + dy**2)
-        
+
         # consider unique pairs
         d_flat = dist_matrix[np.triu_indices(n, k=1)]
-        
+
         # build historgram
         counts, _ = np.histogram(d_flat, bins=r_bins)
-        
+
         # divide by area of annulus for density estimation
         # where area of annulus = pi * (r_outer^2 - r_inner^2)
         r_inner = r_bins[:-1]
         r_outer = r_bins[1:]
         bin_areas = np.pi * (r_outer**2 - r_inner**2)
-        
-        # avoid division by zero if a bin has 0 area 
+
+        # avoid division by zero if a bin has 0 area
         rho_raw = counts / bin_areas
         rho_raw = np.nan_to_num(rho_raw)
 
@@ -260,6 +273,8 @@ class Field:
 
     def get_correlations_grouped_by_alpha(self, r_bins: np.ndarray) -> dict:
         """
+        :param r_bins: The bins for the radii.
+        :type r_bins: np.ndarray
         :return: A dictionary mapping each unique alpha to its average correlation function.
         :rtype: dict
         """
@@ -285,8 +300,26 @@ class Field:
                 grouped_results[float(target_alpha)] = None
 
         return grouped_results
-    
-    def ind_resource_species(self, ind, all_inds, Res, radius, tree, ind_index):
+
+    def ind_resource_species(self, ind: Individual, all_inds: list[Individual], Res: np.ndarray, radius: float, tree: cKDTree, ind_index: int) -> float:
+        """
+        Calculate the resources available to an individual.
+        
+        :param ind: The individual for which to calculate the resources.
+        :type ind: Individual
+        :param all_inds: All individuals.
+        :type all_inds: list[Individual]
+        :param Res: The resource spread.
+        :type Res: np.ndarray
+        :param radius: The radius to use for taking resources.
+        :type radius: float
+        :param tree: A tree of the individuals.
+        :type tree: cKDTree
+        :param ind_index: The index of the individual.
+        :type ind_index: int
+        :return: The resources for the individual.
+        :rtype: float
+        """
         idxs = tree.query_ball_point([ind.x, ind.y], r=radius)
 
         total_comp = 0.0
@@ -299,7 +332,21 @@ class Field:
 
         return Res[x_idx, y_idx] / (1 + total_comp)
 
-    def species_richness_grid(self, surviving_inds, grid_size, Lx, Ly):
+    def species_richness_grid(self, surviving_inds: list[Individual], grid_size: int, Lx: int, Ly: int) -> np.ndarray:
+        """
+        Determine the resources over the given field.
+
+        :param surviving_inds: The individuals on the field.
+        :type surviving_inds: list[Individual]
+        :param grid_size: The size of the resource.
+        :type grid_size: int
+        :param Lx: The size of the field in the x direction.
+        :type Lx: int
+        :param Ly: The size of the field in the y direction.
+        :type Ly: int
+        :return: An array with resources.
+        :rtype: ndarray
+        """
         richness = []
         for i in range(0, Lx, grid_size):
             for j in range(0, Ly, grid_size):
@@ -310,25 +357,42 @@ class Field:
                 richness.append(len(set(ind.species_id for ind in sub)))
         return np.array(richness)
 
-    def power_law(self, A, c, z):
+    def power_law(self, A: float, c: float, z: float) -> float:
+        """
+        Docstring for power_law
+        
+        :param A: Area.
+        :type A: float
+        :param c: Constant.
+        :type c: float
+        :param z: Exponent.
+        :type z: float
+        :return: Result of power law.
+        :rtype: float
+        """
         return c * A**z
 
-def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray):
+def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray) -> None:
     """
     Plot spatial correlation functions with power-law fits.
+    
+    :param results_corr_dict: The correlation values.
+    :type results_corr_dict: dict
+    :param R_values: Description
+    :type R_values: np.ndarray
     """
     sorted_alphas = sorted(results_corr_dict.keys())
     with plt.rc_context(rc=rcCustom):
-        plt.figure()  
+        plt.figure()
         for alpha in sorted_alphas:
             rho_avg = results_corr_dict[alpha]
             if rho_avg is not None and np.sum(rho_avg) > 0:
                 r_centers = (R_values[:-1] + R_values[1:]) / 2
                 valid_indices = rho_avg > 0
-                if np.sum(valid_indices) > 2:  
+                if np.sum(valid_indices) > 2:
                     log_r = np.log10(r_centers[valid_indices])
                     log_rho = np.log10(rho_avg[valid_indices])
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(log_r, log_rho)
+                    slope, _, r_value, _, _ = stats.linregress(log_r, log_rho)
                     r_squared = r_value**2
                     plt.plot(r_centers, rho_avg, marker='o', linewidth=1.3,
                             label=f'$\\alpha$={alpha:.2f}, z={slope:.2f}, $R^2$={r_squared:.2f}')
@@ -347,28 +411,32 @@ def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray):
         plt.show()
     
 class Extinction:
-    """Determine extinction probabilities after habitat loss.
-    """    
+    """
+    Determine extinction probabilities after habitat loss.
+    """
     def __init__(self, a:float, b:float):
-        """initialize parameters.
+        """
+        Initialize parameters.
 
-        Args:
-            a (float): lower bound of the interval in which to search for the root
-            b (float): upper bound of the interval in which to search for the root
-        """        
+        :param a: Lower bound of the interval in which to search for the root.
+        :type a: float
+        :param b: Upper bound of the interval in which to search for the root.
+        :type b: float
+        """
         self.a = a
         self.b = b
 
-    def q_numeric(self, area_loss, n_0):
-        """function to determine q by finding the root numerically, used when bisection method fails
-
-        Args:
-            area_loss (float): fractional area loss, given by dividing the area after loss by the initial area
-            n_0 (int): initial number of individuals for a given species
-
-        Returns:
-            float: root of the function f(q)
-        """ 
+    def q_numeric(self, area_loss: float, n_0: int) -> float:
+        """
+        Function to determine q by finding the root numerically, used when bisection method fails.
+        
+        :param area_loss: Fractional area loss, given by dividing the area after loss by the initial area.
+        :type area_loss: float
+        :param n_0: Initial number of individuals for a given species.
+        :type n_0: int
+        :return: Root of the function f(q)
+        :rtype: float
+        """
         q_try = np.linspace(self.a, self.b, 1000000)
         lhs = area_loss * n_0
         rhs = (q_try / (1 - q_try)) - ((n_0 + 1) * q_try ** (n_0 + 1)) / (1 - q_try ** (n_0 + 1))
@@ -378,31 +446,35 @@ class Extinction:
 
         return q_closest
 
-    def function(self, q, area_loss, n_0):
-        """function that gives f(q) for a given value of q. 
+    def function(self, q: float, area_loss: float, n_0: int) -> float:
+        """
+        Function that gives f(q) for a given value of q.
 
-        Args:
-            q (float): constant between 0 and 1, used to determine the extinction probability
-            area_loss (float): fractional area loss, given by dividing the area after loss by the initial area
-            n_0 (int): initial number of individuals for a given species
-
-        Returns:
-            float: value of the function f(q), evaluated at a given q
+        :param q: Constant between 0 and 1, used to determine the extinction probability.
+        :type q: float
+        :param area_loss: Fractional area loss, given by dividing the area after loss by the initial area.
+        :type area_loss: float
+        :param n_0: Initial number of individuals for a given species.
+        :type n_0: int
+        :return: Value of the function f(q), evaluated at a given q.
+        :rtype: float
         """
         lhs = area_loss * n_0
         rhs = (q / (1 - q)) - ((n_0 + 1) * q ** (n_0 + 1)) / (1 - q ** (n_0 + 1))
         return lhs - rhs
 
-    def q_bisection(self, epsilon, area_loss, n_0):
-        """Root finding using the bisection method.
+    def q_bisection(self, epsilon: float, area_loss: float, n_0: int) -> float:
+        """
+        Root finding using the bisection method.
 
-        Args:
-            epsilon (float): tolerance for the root-finding algorithm
-            area_loss (float): fractional area loss, given by dividing the area after loss by the initial area
-            n_0 (int): initial number of individuals for a given species
-
-        Returns:
-            float: root of the function f(q) within the interval [a, b]
+        :param epsilon: Tolerance for the root-finding algorithm.
+        :type epsilon: float
+        :param area_loss: Fractional area loss, given by dividing the area after loss by the initial area.
+        :type area_loss: float
+        :param n_0: Initial number of individuals for a given species.
+        :type n_0: int
+        :return: Root of the function f(q) within the interval [a, b].
+        :rtype: float
         """
         a = self.a
         b = self.b
@@ -432,23 +504,30 @@ class Extinction:
                 
         return c
 
-    def extinction_probability(self, q, n_c, n_0):
-        """Determine extinction probability.
-
-        Args:
-            q (float): probability parameter
-            n_c (int): critical abundance, the number of individuals below which a species is considered ecologically extinct
-            n_0 (int): initial number of individuals
-
-        Returns:
-            float: extinction probability
-        """    
+    def extinction_probability(self, q: float, n_c: int, n_0: int) -> float:
+        """
+        Determine extinction probability.
+        
+        :param q: Probability parameter.
+        :type q: float
+        :param n_c: Critical abundance, the number of individuals below which a species is considered ecologically extinct.
+        :type n_c: int
+        :param n_0: Initial number of individuals.
+        :type n_0: int
+        :return: Extinction probability.
+        :rtype: float
+        """
         return (q ** (n_c + 1) - 1) / (q ** (n_0 + 1) - 1)
     
 
-def plot_species_distribution(grid: Field, num_species: int = 5):
+def plot_species_distribution(grid: Field, num_species: int = 5) -> None:
     """
     Plot spatial distribution of species with omega region.
+
+    :param grid: The individuals to plot.
+    :type grid: Field
+    :param num_species: How many of the space species to plot.
+    :type num_species: int
     """
     colors = plt.cm.jet(np.linspace(0, 1, num_species))
 
@@ -493,13 +572,20 @@ def plot_species_distribution(grid: Field, num_species: int = 5):
 def plot_sar(grid: Field, R_values: np.ndarray, n_samples: int = 2000):
     """
     Plot Species-Area Relationship with bootstrapped confidence intervals.
+
+    :param grid: The individuals for which to plot the SAR.
+    :type grid: Field
+    :param R_values: The radii to use for the SAR calculation.
+    :type R_values: np.ndarray
+    :param n_samples: The number of samples to draw to approximate the SAR.
+    :type n_samples: int
     """
     S_values = grid.species_area_curve(R_values, n_samples=n_samples)
-    A_values = np.pi * (R_values ** 2)
+    A_values = np.pi * (R_values**2)
     
     log_A = np.log10(A_values)
     log_S = np.log10(S_values)
-    slope, intercept, r_value, p_value, std_err = stats.linregress(log_A, log_S)
+    slope, intercept, r_value, _, _ = stats.linregress(log_A, log_S)
     r_squared = r_value**2
     
     with plt.rc_context(rc=rcCustom):
@@ -523,6 +609,9 @@ def plot_sar(grid: Field, R_values: np.ndarray, n_samples: int = 2000):
 def plot_lognormal_distribution(grid: Field):
     """
     Plot species abundance distribution with lognormal fit.
+
+    :param grid: The individuals for which to plot the abundance distribution.
+    :type grid: Field
     """
     # get abundances
     abundances = np.array([len(species) for species in grid.points.values()])
@@ -534,7 +623,7 @@ def plot_lognormal_distribution(grid: Field):
     counts, bin_edges = np.histogram(abundances, bins=bins)
     fractions = counts / counts.sum()
     octave_centers = np.log2(np.sqrt(bin_edges[:-1] * bin_edges[1:]))
-    
+
     # fit lognormal distribution
     log2_abundances = np.log2(abundances)
     mu_log2 = log2_abundances.mean()
@@ -543,9 +632,9 @@ def plot_lognormal_distribution(grid: Field):
     normal_pdf = norm.pdf(x_log2, mu_log2, sigma_log2)
     bin_width = np.mean(np.diff(octave_centers)) if len(octave_centers) > 1 else 1.0
     normal_pdf_scaled = normal_pdf * bin_width
-    
+
     # goodness of fit (K-S test)
-    statistic, p_value = kstest(log2_abundances, 'norm', 
+    _, p_value = kstest(log2_abundances, 'norm', 
                                 args=(mu_log2, sigma_log2))
     
     with plt.rc_context(rc=rcCustom):
@@ -555,7 +644,7 @@ def plot_lognormal_distribution(grid: Field):
                 label='Simulated SAD')
         ax.plot(x_log2, normal_pdf_scaled, 'r-', linewidth=2,
                  label=f'Lognormal fit ($\\mu$={mu_log2:.2f}, $\\sigma$={sigma_log2:.2f})')
-        
+
         ax.set_xlabel('Abundance (octaves scaled)')
         ax.set_ylabel('Fraction of species')
         fig.suptitle("Species Abundance Distribution")
@@ -566,6 +655,12 @@ def plot_lognormal_distribution(grid: Field):
         plt.show()
 
 def plot_competition(species_alpha: list[float]):
+    """
+    Plot the resources and the amount of surviving individuals.
+
+    :param species_alpha: The alpha to use for generating species.
+    :type species_alpha: list[float]
+    """
 
     # SAR competition simulation
     lx, ly = 200, 200
