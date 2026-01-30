@@ -5,7 +5,9 @@ from matplotlib import patches, pyplot as plt
 from scipy.stats import norm, kstest
 from scipy import stats
 from sklearn.neighbors import KDTree
-from plots import rcCustom, rcCustom_wide
+from plots import rcCustom
+from scipy.optimize import curve_fit
+from scipy.spatial import cKDTree
 
 
 
@@ -46,7 +48,8 @@ class Field:
             delta0: float,
             delta_diff: float,
             d: float,
-            L_av: int
+            L_av: int,
+            comp_values: list[float] = None
         ):
         """
         Initialise an area.
@@ -69,29 +72,44 @@ class Field:
         :type d: float
         :param L_av: averaging area side length
         :type L_av: int
+        :param comp_values: Competition coefficient per species
+        :type comp_values: list[float]
         """
-        assert m > 0
-        assert l > 0
-        assert d > 0
+        assert m > 0 and l > 0 and d > 0
         self.species_alpha = species_alpha
         self.m = m
         self.l = l
         self.delta0 = delta0
         self.delta_diff = delta_diff
         self.d = d
+        self.L_av = L_av
+        self.omega_range = L_av / 2
+
+        if comp_values is None:
+            comp_values = [1.0] * len(species_alpha) # Initially no competition
+
         self.points = dict()
-        previous_alpha = 0
+        previous_alpha = None
         count = 0
+        species_id = 0  # global species counter
+
         for alpha in self.species_alpha:
-            if previous_alpha == alpha:
+            if alpha == previous_alpha:
                 count += 1
             else:
                 previous_alpha = alpha
                 count = 0
-            self.points[f"{alpha}-{count}"] = self.generate_species(alpha) # (alpha, species index): [list of individuals]
-        
-        self.L_av = L_av
-        self.omega_range = L_av / 2
+
+            key = f"{alpha}-{count}"
+            species_inds = self.generate_species(alpha)
+
+            # assign species_id and competition coefficient
+            for ind in species_inds:
+                ind.species_id = species_id
+                ind.comp = comp_values[species_id]
+
+            self.points[key] = species_inds
+            species_id += 1
 
     def generate_species(self, alpha: float) -> list[Individual]:
         """
@@ -103,39 +121,38 @@ class Field:
         :rtype: list[Individual]
         """
         branch_options = [Branch.LEFT, Branch.RIGHT, Branch.BOTH]
-        p = [1-alpha, 1-alpha, 2*alpha-1]
+        p = [1 - alpha, 1 - alpha, 2*alpha - 1]
 
         # initial point
         theta0 = np.random.uniform(0, 2*np.pi)
-
         r0 = self.get_initial_point()
         x = np.array([r0.x])
         y = np.array([r0.y])
         thetas = np.array([theta0])
 
-        #ls = np.linspace(self.l, 1, self.m)
         l0 = self.l
         for n in range(1, self.m+1):
-            #l = ls[n-1]
-            l = l0*(1.5**(-(n-1)))
+            l = l0 * 1.5**(-(n-1))
             delta_max = self.delta0 * (self.delta_diff)**(2*(n//2)/self.m)
-
             point_count = len(x)
 
             deltas = np.random.uniform(-delta_max, delta_max, point_count)
             new_thetas = thetas + deltas + np.pi/2
             branches = np.random.choice(branch_options, p=p, size=point_count)
+
             left = (branches == Branch.LEFT) | (branches == Branch.BOTH)
             right = (branches == Branch.RIGHT) | (branches == Branch.BOTH)
-            left_x = x[left] + l*np.cos(new_thetas[left])
-            left_y = y[left] + l*np.sin(new_thetas[left])
-            right_x = x[right] + l*np.cos(new_thetas[right] + np.pi)
-            right_y = y[right] + l*np.sin(new_thetas[right] + np.pi)
+
+            left_x = x[left] + l * np.cos(new_thetas[left])
+            left_y = y[left] + l * np.sin(new_thetas[left])
+            right_x = x[right] + l * np.cos(new_thetas[right] + np.pi)
+            right_y = y[right] + l * np.sin(new_thetas[right] + np.pi)
+
             x = np.concatenate([left_x, right_x])
             y = np.concatenate([left_y, right_y])
             thetas = np.concatenate([new_thetas[left], new_thetas[right]])
 
-        return list(map(lambda x: Individual(x[0], x[1], x[2]), np.stack([x, y, thetas], axis=-1)))
+        return [Individual(x_, y_, th_) for x_, y_, th_ in np.stack([x, y, thetas], axis=-1)]
 
     def get_initial_point(self) -> Individual:
         """
@@ -240,19 +257,18 @@ class Field:
             rho_s = np.zeros_like(rho_raw)
 
         return rho_s
-    # group list of list by alpha
+
     def get_correlations_grouped_by_alpha(self, r_bins: np.ndarray) -> dict:
         """
         :return: A dictionary mapping each unique alpha to its average correlation function.
         :rtype: dict
         """
         grouped_results = {}
-        unique_alphas = list(set(map(lambda key: key.split("-")[0], self.points.keys()))) #sorted(list(set(self.species_alpha)))
+        unique_alphas = list(set(map(lambda key: key.split("-")[0], self.points.keys())))
         # for each alpha
         for target_alpha in unique_alphas:
-            
             current_alpha_correlations = []
-            
+
             # associate alpha with its species points
             for alpha_val in self.points.keys():
                 if alpha_val.split("-")[0] == target_alpha:
@@ -260,16 +276,43 @@ class Field:
                     # add valid results
                     if np.sum(rho) > 0: 
                         current_alpha_correlations.append(rho)
-            
+
             # compute average correlation for this group
             if len(current_alpha_correlations) > 0:
                 avg_rho = np.mean(current_alpha_correlations, axis=0)
                 grouped_results[float(target_alpha)] = avg_rho
             else:
                 grouped_results[float(target_alpha)] = None
-                
+
         return grouped_results
-#plotting code   
+    
+    def ind_resource_species(self, ind, all_inds, Res, radius, tree, ind_index):
+        idxs = tree.query_ball_point([ind.x, ind.y], r=radius)
+
+        total_comp = 0.0
+        for j in idxs:
+            if j != ind_index:
+                total_comp += all_inds[j].comp
+
+        x_idx = int(np.clip(ind.x, 0, Res.shape[0]-1))
+        y_idx = int(np.clip(ind.y, 0, Res.shape[1]-1))
+
+        return Res[x_idx, y_idx] / (1 + total_comp)
+
+    def species_richness_grid(self, surviving_inds, grid_size, Lx, Ly):
+        richness = []
+        for i in range(0, Lx, grid_size):
+            for j in range(0, Ly, grid_size):
+                sub = [
+                    ind for ind in surviving_inds
+                    if i <= ind.x < i + grid_size and j <= ind.y < j + grid_size
+                ]
+                richness.append(len(set(ind.species_id for ind in sub)))
+        return np.array(richness)
+
+    def power_law(self, A, c, z):
+        return c * A**z
+
 def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray):
     """
     Plot spatial correlation functions with power-law fits.
@@ -331,7 +374,6 @@ class Extinction:
         rhs = (q_try / (1 - q_try)) - ((n_0 + 1) * q_try ** (n_0 + 1)) / (1 - q_try ** (n_0 + 1))
         root_find = lhs - rhs
 
-        y_closest = np.min(np.abs(root_find))
         q_closest = q_try[np.argmin(np.abs(root_find))]
 
         return q_closest
@@ -346,7 +388,7 @@ class Extinction:
 
         Returns:
             float: value of the function f(q), evaluated at a given q
-        """    
+        """
         lhs = area_loss * n_0
         rhs = (q / (1 - q)) - ((n_0 + 1) * q ** (n_0 + 1)) / (1 - q ** (n_0 + 1))
         return lhs - rhs
@@ -361,7 +403,7 @@ class Extinction:
 
         Returns:
             float: root of the function f(q) within the interval [a, b]
-        """    
+        """
         a = self.a
         b = self.b
 
@@ -523,16 +565,130 @@ def plot_lognormal_distribution(grid: Field):
         fig.savefig("lognormal_distribution.png")
         plt.show()
 
+def plot_competition(species_alpha: list[float]):
+
+    # SAR competition simulation
+    lx, ly = 200, 200
+    n_species = 20
+    radius = 2.0
+    threshold_intake = 0.3
+    n_runs = 10
+    grid_sizes = [20, 40, 60]
+
+    # Log-spaced competition coefficients
+    total_species = len(species_alpha)
+    comp_values = np.logspace(-2, 1, total_species)
+
+    SAR_runs = []
+    for _ in range(n_runs):
+        # Generate resource field
+        res = np.random.gamma(shape=2.0, scale=1.0, size=(lx, ly))
+
+        # Generate branching field
+        field = Field(
+            species_alpha=species_alpha,
+            m=10,
+            l=20,
+            delta0=0.1,
+            delta_diff=8,
+            d=15,
+            L_av=20,
+            comp_values=comp_values
+        )
+
+        # Flatten all individuals
+        all_inds = [ind for species in field.points.values() for ind in species]
+
+        # Rescale coords for resource comp
+        xs = np.array([ind.x for ind in all_inds])
+        ys = np.array([ind.y for ind in all_inds])
+        x_range = xs.max() - xs.min()
+        y_range = ys.max() - ys.min()
+
+        xs_rescaled = (xs - xs.min()) / x_range * (lx-1) if x_range != 0 else np.full_like(xs, lx/2)
+        ys_rescaled = (ys - ys.min()) / y_range * (ly-1) if y_range != 0 else np.full_like(ys, ly/2)
+
+        for i, ind in enumerate(all_inds):
+            ind.x = xs_rescaled[i]
+            ind.y = ys_rescaled[i]
+            ind.comp = comp_values[ind.species_id % n_species] # Assign comp value based on species id
+
+        # Build KDTree
+        points_array = np.array([[ind.x, ind.y] for ind in all_inds])
+        tree = cKDTree(points_array)
+
+        surviving_inds = []
+        for i, ind in enumerate(all_inds):
+            intake = field.ind_resource_species(
+                ind, all_inds, res, radius, tree, i
+            )
+            if intake >= threshold_intake:
+                surviving_inds.append(ind)
+
+        # Compute SAR with resource comp
+        SAR_run = []
+        for gs in grid_sizes:
+            richness = field.species_richness_grid(surviving_inds, gs, lx, ly)
+            SAR_run.append(np.mean(richness))
+
+        SAR_runs.append(SAR_run)
+
+    # Get surviving individuals per species
+    surv_counts = {}
+    for ind in surviving_inds:
+        sid = ind.species_id
+        surv_counts[sid] = surv_counts.get(sid, 0) + 1
+
+    # Map species IDs to consecutive numbers 0..n-1
+    sorted_sids = sorted(surv_counts.keys())
+    x = list(range(len(sorted_sids)))
+    counts = [surv_counts[sid] for sid in sorted_sids]
+
+    plt.figure(figsize=(12, 6))
+    plt.bar(x, counts, color='skyblue', edgecolor='black')
+    plt.xlabel("Species Index")
+    plt.ylabel("Remaining Individuals")
+    plt.title("Remaining Individuals per Species")
+    plt.grid(axis='y', alpha=0.3)
+    plt.show()
+
+    # Plot resource field
+    plt.figure(figsize=(8, 6))
+    plt.imshow(res, origin='lower', cmap='viridis', interpolation='nearest')
+    plt.colorbar(label='Resource value')
+    plt.title('Resource Field (Gamma distribution)')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.show()
+
+    SAR_runs = np.array(SAR_runs)
+    SAR_mean = SAR_runs.mean(axis=0)
+    SAR_std = SAR_runs.std(axis=0)
+
+    # Fit power law
+    params, _ = curve_fit(field.power_law, np.array(grid_sizes), SAR_mean, p0=[1, 0.2])
+    c_fit, z_fit = params
+    print(f"Fitted SAR: S = {c_fit:.2f} * A^{z_fit:.2f}")
+
+    # Plot SAR with competition
+    plt.figure(figsize=(8,6))
+    plt.errorbar(grid_sizes, SAR_mean, yerr=SAR_std, fmt='o', capsize=5, label='Mean SAR ± SD')
+    plt.loglog(grid_sizes, field.power_law(np.array(grid_sizes), *params), '-', label=f'Fit (z={z_fit:.2f})')
+    plt.xlabel("Area")
+    plt.ylabel("Mean species richness")
+    plt.title("Species–Area Relationship with Branching & Competition")
+    plt.legend()
+    plt.grid(True, which="both", ls="--")
+    plt.show()
 
 def main():
     """Main simulation and analysis pipeline."""
     np.random.seed(42)
-    #TODO: justify parameters
     t = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.55, -0.65]
     alpha_values = list(map(lambda o: 2**o, t))
     species_alpha = [o for o in alpha_values for i in range(50)]
     grid = Field(
-        species_alpha=species_alpha,   
+        species_alpha=species_alpha,
         m=14,
         l=20,
         delta0=0.1,
@@ -540,13 +696,6 @@ def main():
         d=15,
         L_av=20
     )
-
-    # Save species data
-    with open("test.json", "w+") as f:
-        d = dict()
-        for key in grid.points.keys():
-            d[key] = list(map(lambda x: [x.x, x.y, x.theta], grid.points[key]))
-        json.dump(d, f)
 
     # radius range
     r_min = 0.5
