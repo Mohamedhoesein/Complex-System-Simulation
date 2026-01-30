@@ -13,6 +13,7 @@ rcCustom_wide["legend.loc"] = "best"
 rcCustom_wide["figure.figsize"] = (Inch(28.58), Inch(12.09))
 
 rcCustom = plt.rcParams.copy()
+
 rcCustom["figure.dpi"] = 150
 rcCustom["axes.grid"] = True
 rcCustom["grid.alpha"] = 0.2  # ← ADD THIS

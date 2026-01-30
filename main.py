@@ -275,7 +275,6 @@ def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray):
     Plot spatial correlation functions with power-law fits.
     """
     sorted_alphas = sorted(results_corr_dict.keys())
-    
     with plt.rc_context(rc=rcCustom):
         plt.figure()  
         for alpha in sorted_alphas:
@@ -303,6 +302,107 @@ def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray):
         plt.tight_layout()
         plt.savefig("spatial_correlation.png")
         plt.show()
+    
+class Extinction:
+    """Determine extinction probabilities after habitat loss.
+    """    
+    def __init__(self, a:float, b:float):
+        """initialize parameters.
+
+        Args:
+            a (float): lower bound of the interval in which to search for the root
+            b (float): upper bound of the interval in which to search for the root
+        """        
+        self.a = a
+        self.b = b
+
+    def q_numeric(self, area_loss, n_0):
+        """function to determine q by finding the root numerically, used when bisection method fails
+
+        Args:
+            area_loss (float): fractional area loss, given by dividing the area after loss by the initial area
+            n_0 (int): initial number of individuals for a given species
+
+        Returns:
+            float: root of the function f(q)
+        """ 
+        q_try = np.linspace(self.a, self.b, 1000000)
+        lhs = area_loss * n_0
+        rhs = (q_try / (1 - q_try)) - ((n_0 + 1) * q_try ** (n_0 + 1)) / (1 - q_try ** (n_0 + 1))
+        root_find = lhs - rhs
+
+        y_closest = np.min(np.abs(root_find))
+        q_closest = q_try[np.argmin(np.abs(root_find))]
+
+        return q_closest
+
+    def function(self, q, area_loss, n_0):
+        """function that gives f(q) for a given value of q. 
+
+        Args:
+            q (float): constant between 0 and 1, used to determine the extinction probability
+            area_loss (float): fractional area loss, given by dividing the area after loss by the initial area
+            n_0 (int): initial number of individuals for a given species
+
+        Returns:
+            float: value of the function f(q), evaluated at a given q
+        """    
+        lhs = area_loss * n_0
+        rhs = (q / (1 - q)) - ((n_0 + 1) * q ** (n_0 + 1)) / (1 - q ** (n_0 + 1))
+        return lhs - rhs
+
+    def q_bisection(self, epsilon, area_loss, n_0):
+        """Root finding using the bisection method.
+
+        Args:
+            epsilon (float): tolerance for the root-finding algorithm
+            area_loss (float): fractional area loss, given by dividing the area after loss by the initial area
+            n_0 (int): initial number of individuals for a given species
+
+        Returns:
+            float: root of the function f(q) within the interval [a, b]
+        """    
+        a = self.a
+        b = self.b
+
+        f_a = self.function(a, area_loss, n_0)
+        f_b = self.function(b, area_loss, n_0)
+
+        # Check condition for bisection method
+        if f_a * f_b > 0:
+            print(f"Bisection method fails for initial species count {n_0}, using other method.")
+            q = self.q_numeric(area_loss, n_0)
+            return q
+        
+        # Middle point
+        c = (a + b) / 2.0
+        f_c = self.function(c, area_loss, n_0)
+
+        while abs(f_c) > epsilon:
+            c = (a + b) / 2.0
+            f_c = self.function(c, area_loss, n_0)
+            f_a = self.function(a, area_loss, n_0)
+
+            if f_c * f_a < 0:
+                b = c
+            else:
+                a = c
+                
+        return c
+
+    def extinction_probability(self, q, n_c, n_0):
+        """Determine extinction probability.
+
+        Args:
+            q (float): probability parameter
+            n_c (int): critical abundance, the number of individuals below which a species is considered ecologically extinct
+            n_0 (int): initial number of individuals
+
+        Returns:
+            float: extinction probability
+        """    
+        return (q ** (n_c + 1) - 1) / (q ** (n_0 + 1) - 1)
+    
 
 def plot_species_distribution(grid: Field, num_species: int = 5):
     """
