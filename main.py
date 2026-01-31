@@ -7,8 +7,9 @@ from scipy.spatial import cKDTree
 from sklearn.neighbors import KDTree
 
 from enum import Enum
+import os
 
-from plots import rcCustom
+from plots import rcCustom, output_dir
 
 
 
@@ -407,7 +408,7 @@ def plot_correlation_functions(results_corr_dict: dict, R_values: np.ndarray) ->
         plt.title('Spatial Correlation Functions')
         plt.legend()
         plt.tight_layout()
-        plt.savefig("spatial_correlation.png")
+        plt.savefig(f"{output_dir}spatial_correlation.png")
         plt.show()
     
 class Extinction:
@@ -566,7 +567,7 @@ def plot_species_distribution(grid: Field, num_species: int = 5) -> None:
         plt.ylabel("y")
         plt.legend()
         plt.tight_layout()
-        plt.savefig("species_distribution.png")
+        plt.savefig(f"{output_dir}species_distribution.png")
         plt.show()
 
 def plot_sar(grid: Field, R_values: np.ndarray, n_samples: int = 2000):
@@ -602,7 +603,7 @@ def plot_sar(grid: Field, R_values: np.ndarray, n_samples: int = 2000):
         plt.title("Species-Area Relationship (SAR)")
         plt.legend()
         plt.tight_layout()
-        plt.savefig("sar.png")
+        plt.savefig(f"{output_dir}sar.png")
 
         plt.show()
 
@@ -651,7 +652,7 @@ def plot_lognormal_distribution(grid: Field):
         ax.set_title(f"(K-S test: p={p_value:.4f})", pad = 20)
         ax.legend()
         fig.tight_layout()
-        fig.savefig("lognormal_distribution.png")
+        fig.savefig(f"{output_dir}lognormal_distribution.png")
         plt.show()
 
 def plot_competition(species_alpha: list[float]):
@@ -792,21 +793,24 @@ def main():
         L_av=20
     )
 
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
     # radius range
     r_min = 0.5
     r_max = 15
     num_bins = 30 
     R_values = np.logspace(np.log10(r_min), np.log10(r_max), num_bins + 1)
-    
+
     results_corr_dict = grid.get_correlations_grouped_by_alpha(R_values)
     plot_correlation_functions(results_corr_dict, R_values)
-    
+
     plot_species_distribution(grid, num_species=5)
-    
+
     plot_sar(grid, R_values, n_samples=2000)
-    
+
     plot_lognormal_distribution(grid)
-    
+
 
 if __name__ == "__main__":
     main()

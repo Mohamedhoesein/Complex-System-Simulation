@@ -86,9 +86,21 @@ Grid-based spatial competition model:
 
 ## Repository Structure
 
+`plots.py` contains all configuration for plotting the final data.
+
+`habitat.py` contains any code related to extinction.
+
+`main.py` is the main entry point of the project, and handles the species generation alongside the needed analysis for the core SAR analysis and resource competition.
+
 ## Installation & Usage
 
 ### Prerequisites
+
+The following packages are required to run the modelling:
+* numpy
+* matplotlib
+* scikit-learn
+* scipy
 
 ### Setup
 

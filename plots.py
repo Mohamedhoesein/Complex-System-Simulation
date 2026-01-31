@@ -1,5 +1,7 @@
 from matplotlib import pyplot as plt
 
+import os
+
 def Inch(d_cm):
 
     d_inch = d_cm / 2.54
@@ -23,3 +25,5 @@ rcCustom["figure.figsize"] = (8,6.75)
 rcCustom["axes.titlelocation"] = "center"  # alignment of the title: {left, right, center}
 rcCustom["axes.titlesize"] = 14   # font size of the axes title
 rcCustom["font.size"] = 12
+
+output_dir = os.path.dirname(os.path.realpath(__file__)) + "/output/"
