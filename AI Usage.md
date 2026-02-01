@@ -7,7 +7,7 @@ During this project, we utilized multiple AI agents for different purposes:
 - **Google NotebookLM**, for literature comprehension and synthesis 
 - **GitHub Copilot**, for code completion and docstring generation
 - **ChatGPT** (GPT-5 - free tier), for debugging and code optimization 
-- **Gemini**  (Pro - student account, for debugging and algorithm implementation
+- **Gemini**  (Pro - student account), for debugging and algorithm implementation
 ---
 
 ## Usage by Project Phase
@@ -16,10 +16,11 @@ During this project, we utilized multiple AI agents for different purposes:
 
 We used Google NotebookLM to improve our understanding of the literature, i.e. García Martín & Goldenfeld (2006) and Kitzes & Harte (2014).
 Some queries examples:
-- "Can you help me defining: nested sampling, the term conspecific, octave classification?"
-- "Can you explain me step by step the derivation of equation [20] in the supporting text?"
-- "If I am trying to implement the first paper (García Martín & Goldenfeld, 2006), can i add then considerations from Kitzes & Harte (2014)?
-
+```
+- Can you help me defining: nested sampling, the term conspecific, octave classification?
+- Can you explain me step by step the derivation of equation [20] in the supporting text?
+- If I am trying to implement the first paper (García Martín & Goldenfeld, 2006), can i add then considerations from Kitzes & Harte (2014)?
+```
 NotebookLM supported our learning processe with and theoretical framework. 
 
 ### 2. Baseline Model Implementation
@@ -35,7 +36,7 @@ We are trying to implement an sar model, the individuals are placed based on sel
 Is the implementation correct to obtain individuals with a power law correlation function?
 [pasted code]
 ```
-*Reply:* ChatGPT focused on general debugging ("check branching probabilities," "verify angle distributions") but didn't identify the core issue with our correlation function calculation.
+*Reply:* ChatGPT focused on general debugging ("check branch probabilities," "verify angular recursion") but didn't identify the core issue with our correlation function calculation.
 
 *Follow-up query:*
 ```
@@ -55,9 +56,16 @@ Gemini was able to guide us to the correct normalized correlation function expre
 
 #### Issue 2: Branch Length Scaling
 
-Moving on with SAR computations, we experiences some issues in interpreteting the parameters used by García Martín & Goldenfeld (2006), in particular regarding initial branch length l₀ and decay rates. 
+Moving on with SAR computations, we experiences some issues in interpreteting the parameters used by García Martín & Goldenfeld (2006), in particular regarding initial branch length l0 and decay rates. 
 As a result, plots were showing non-linear behavior on log-log scale, or produced z values outside the expected range [0.2, 0.4]. 
-We initially asked ChatGPT to help us with parameters...
+We initially asked ChatGPT to help us with parameters tuning in general, to allow for broader results.
+```
+Can you give guidance on the parameters for the Field class, to get a pronounced power law in the s_c values?
+```
+*Reply:* ChatGPT provided "parameter ranges that reliably give power laws" together with physics intuition, but did not provide the solution we were looking for.
 
-
+As we realised that the problem was probably the initial branch length, we decided to shift our focus on the decay rates. First, we..
+```
+Do you know any paper that implemented a self similar distribution with power law correlation function using a bisecting tree algorithm?
+```
 
