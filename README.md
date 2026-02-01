@@ -27,7 +27,7 @@ Our simulations reveal that while power-law SAR emerges elegantly from spatial c
 **Approach:** Implement fractal tree generation with clustering parameter α, compute proximity-based species detection, validate against theoretical predictions.
 
 ### 2. How do population thresholds alter extinction predictions from SAR and EAR models?
-**Hypothesis:** Classical SAR overestimates extinctions by ignoring spatial distribution and rarity. Extinction-Area Relationship (EAR) models, which account for critical abundance thresholds, provide better predictions (Kitzes & Hart, 2014) [2].
+**Hypothesis:** Classical SAR gives wrong estimates for extinctions by ignoring the number of individuals necessary for a species to survive and rarity. Extinction-Area Relationship (EAR) models, which account for critical abundance thresholds, provide better predictions (Kitzes & Hart, 2014) [2].
 
 **Approach:** Compare SAR vs. EAR extinction predictions under varying habitat loss scenarios, using minimum viable population sizes ($n_c$).
 
@@ -64,11 +64,11 @@ Following García Martín & Goldenfeld (2006) [1], we generate species distribut
 
 Classical SAR assumes species go extinct when all individuals are removed. EAR improves this by modeling **extinction probability** based on critical abundance:
 
-1. **Critical abundance ($n_c$):** Minimum viable population size below which extinction occurs
-2. **Extinction probability:** For species with n individuals: **ADD**
-3. **Parameter estimation:** Solve for q using numerical root-finding to match observed extinction patterns
+1. **Critical abundance ($n_c$):** Minimum viable population size below which extinction occurs (Traill et al., 2014) [3].
+2. **Extinction probability:** For species with $n_0$ initial individuals: $\epsilon(a|n_c, n_0) = \frac{q^{n_c +1} - 1}{q^{n_0 +1} - 1}$.
+3. **Parameter estimation:** Solve for q using numerical root-finding (bisection method) to match observed extinction patterns: $a n_0 = \frac{q}{1-q}-\frac{(n_0 + 1) q^{n_0+1}}{1-q^{n_0+1}}$, with $a$ being the fractional area loss.
 
-**Expected result:** EAR predicts fewer extinctions than classical SAR, especially for spatially aggregated species.
+**Expected result:** EAR predicts that the extinction probability increases faster as the habitat decreases than classical SAR, with the extinction probability increasing as the critical abundace becomes larger.
 
 ### Extension 2: Resource Competition
 
