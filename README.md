@@ -105,17 +105,17 @@ The following packages are required to run the modelling:
 ## Conclusions
 
 ### Baseline Model Validated 
-- Power-law SAR successfully reproduced: $S(A) \sim A^{0.36} (R^2 = 1.00)$
+- Power-law SAR successfully reproduced: $S(A) \sim A^{0.36}, (R^2 = 1.00)$
 - Clustering (fractal branching) is necessary condition for scale-free behavior
 - Confirms García Martín & Goldenfeld (2006) theoretical framework
 
 ### Extensions Reveal Limitations
 **Habitat loss disrupts power-law**
-  - ...
-  - EAR models provide more accurate predictions under fragmentation
+  - EAR models provide more accurate extinction predictions
+  - Measures are fully based on area loss, initial number of individuals and critical abundance. 
   
 **Resource competition modifies equilibria**
-  - Species interactions reshape spatial patterns beyond pure geometry
+  - Species interactions reshape spatial patterns 
   - Power-law persists but with altered parameters
 
 ---
@@ -127,10 +127,9 @@ The following packages are required to run the modelling:
 
 [3] Traill, L. W., Bradshaw, C. J. A., & Brook, B. W. (2007). Minimum viable population size: A meta-analysis of 30 years of published estimates. Biological Conservation, 139(1-2), 159–166. https://doi.org/10.1016/j.biocon.2007.06.011
 
-
 ---
 
-## AI Usage Declaration
+## AI Usage
 
 This project utilized AI as a coding assistant, mainly for documentation structure and debugging. AI strategy is available at `AI-usage.md`.
 
@@ -146,4 +145,5 @@ This project utilized AI as a coding assistant, mainly for documentation structu
 
 ‌
 ‌
+
 
