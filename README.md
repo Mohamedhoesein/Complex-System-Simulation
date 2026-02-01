@@ -92,6 +92,11 @@ Grid-based spatial competition model:
 
 `main.py` is the main entry point of the project, and handles the species generation alongside the needed analysis for the core SAR analysis and resource competition.
 
+`AI-usage.md` is the markdown which describes when and how we used AI assistance.
+
+`Team 6 CSS` is the presentation file, that can also be found at this [link](https://prezi.com/view/PtV69XDQ0ndZ5VTtqbZD/?referral_token=D-AhfWlnB3FN)
+
+``.
 ## Installation & Usage
 
 ### Prerequisites
@@ -145,5 +150,6 @@ This project utilized AI as a coding assistant, mainly for documentation structu
 
 ‌
 ‌
+
 
 
