@@ -96,7 +96,6 @@ Grid-based spatial competition model:
 
 `Team 6 CSS` is the presentation file, that can also be found at this [link](https://prezi.com/view/PtV69XDQ0ndZ5VTtqbZD/?referral_token=D-AhfWlnB3FN)
 
-``.
 ## Installation & Usage
 
 ### Prerequisites
@@ -150,6 +149,7 @@ This project utilized AI as a coding assistant, mainly for documentation structu
 
 ‌
 ‌
+
 
 
 
