@@ -102,8 +102,6 @@ The following packages are required to run the modelling:
 * scikit-learn
 * scipy
 
-### Setup
-
 ## Conclusions
 
 ### Baseline Model Validated 
@@ -134,20 +132,18 @@ The following packages are required to run the modelling:
 
 ## AI Usage Declaration
 
-This project utilized AI as a coding assistant, mainly for documentation structure and debugging. AI strategy is available at `file_name`
+This project utilized AI as a coding assistant, mainly for documentation structure and debugging. AI strategy is available at `AI-usage.md`.
 
 ---
 
-## Authors (tags?)
-Tadhg Jones 
-
-Anna van Dun
-
-Anna De Martin
-
-Ricardo Mohamedhoesein
+## Authors
+- [Tadhg Jones](https://github.com/Tadhgg2002)
+- [Anna van Dun](https://github.com/Annnvd)
+- [Anna De Martin](https://github.com/annademartin)
+- [Ricardo Mohamedhoesein](https://github.com/Mohamedhoesein)
 
 
 
 ‌
 ‌
+
