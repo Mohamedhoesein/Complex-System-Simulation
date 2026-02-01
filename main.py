@@ -655,7 +655,7 @@ def plot_lognormal_distribution(grid: Field):
         fig.savefig(f"{output_dir}lognormal_distribution.png")
         plt.show()
 
-def plot_competition(species_alpha: list[float]):
+def plot_competition(alpha_values: list[float], species_alpha: list[float]):
     """
     Plot the resources and the amount of surviving individuals.
 
@@ -664,50 +664,41 @@ def plot_competition(species_alpha: list[float]):
     """
 
     # SAR competition simulation
-    lx, ly = 200, 200
-    n_species = 20
-    radius = 2.0
-    threshold_intake = 0.3
-    n_runs = 10
-    grid_sizes = [20, 40, 60]
-
+    Lx, Ly = 200, 200
+    n_species = len(species_alpha)
+    radius = 5
+    threshold_intake = 0.5
+    n_runs = 50
+    grid_sizes = np.array([10, 20, 30, 40, 50, 60, 80, 100])
     # Log-spaced competition coefficients
-    total_species = len(species_alpha)
-    comp_values = np.logspace(-2, 1, total_species)
+    comp_values = np.logspace(-2, 1, n_species) # based on alpha
 
     SAR_runs = []
-    for _ in range(n_runs):
-        # Generate resource field
-        res = np.random.gamma(shape=2.0, scale=1.0, size=(lx, ly))
+    for run in range(n_runs):
+        Res = np.random.gamma(shape=2.0, scale=1.0, size=(Lx, Ly))
 
         # Generate branching field
         field = Field(
             species_alpha=species_alpha,
-            m=10,
-            l=20,
+            m=12,
+            l=100,
             delta0=0.1,
             delta_diff=8,
-            d=15,
-            L_av=20,
+            d=100,
+            L_av=Lx,
             comp_values=comp_values
-        )
+        )       
 
         # Flatten all individuals
         all_inds = [ind for species in field.points.values() for ind in species]
-
-        # Rescale coords for resource comp
+        all_inds = [ind for ind in all_inds if -Lx/2 <= ind.x < Lx/2 and -Ly/2 <= ind.y < Ly/2] # take field of size 200x200
         xs = np.array([ind.x for ind in all_inds])
         ys = np.array([ind.y for ind in all_inds])
-        x_range = xs.max() - xs.min()
-        y_range = ys.max() - ys.min()
-
-        xs_rescaled = (xs - xs.min()) / x_range * (lx-1) if x_range != 0 else np.full_like(xs, lx/2)
-        ys_rescaled = (ys - ys.min()) / y_range * (ly-1) if y_range != 0 else np.full_like(ys, ly/2)
-
+        
         for i, ind in enumerate(all_inds):
-            ind.x = xs_rescaled[i]
-            ind.y = ys_rescaled[i]
-            ind.comp = comp_values[ind.species_id % n_species] # Assign comp value based on species id
+            ind.x = xs[i] + Lx/2
+            ind.y = ys[i] + Ly/2 
+            # shift indexes to positive for resource grid indexing
 
         # Build KDTree
         points_array = np.array([[ind.x, ind.y] for ind in all_inds])
@@ -716,7 +707,7 @@ def plot_competition(species_alpha: list[float]):
         surviving_inds = []
         for i, ind in enumerate(all_inds):
             intake = field.ind_resource_species(
-                ind, all_inds, res, radius, tree, i
+                ind, all_inds, Res, radius, tree, i
             )
             if intake >= threshold_intake:
                 surviving_inds.append(ind)
@@ -724,7 +715,7 @@ def plot_competition(species_alpha: list[float]):
         # Compute SAR with resource comp
         SAR_run = []
         for gs in grid_sizes:
-            richness = field.species_richness_grid(surviving_inds, gs, lx, ly)
+            richness = field.species_richness_grid(surviving_inds, gs, Lx, Ly)
             SAR_run.append(np.mean(richness))
 
         SAR_runs.append(SAR_run)
@@ -732,30 +723,8 @@ def plot_competition(species_alpha: list[float]):
     # Get surviving individuals per species
     surv_counts = {}
     for ind in surviving_inds:
-        sid = ind.species_id
-        surv_counts[sid] = surv_counts.get(sid, 0) + 1
-
-    # Map species IDs to consecutive numbers 0..n-1
-    sorted_sids = sorted(surv_counts.keys())
-    x = list(range(len(sorted_sids)))
-    counts = [surv_counts[sid] for sid in sorted_sids]
-
-    plt.figure(figsize=(12, 6))
-    plt.bar(x, counts, color='skyblue', edgecolor='black')
-    plt.xlabel("Species Index")
-    plt.ylabel("Remaining Individuals")
-    plt.title("Remaining Individuals per Species")
-    plt.grid(axis='y', alpha=0.3)
-    plt.show()
-
-    # Plot resource field
-    plt.figure(figsize=(8, 6))
-    plt.imshow(res, origin='lower', cmap='viridis', interpolation='nearest')
-    plt.colorbar(label='Resource value')
-    plt.title('Resource Field (Gamma distribution)')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.show()
+            sid = ind.species_id
+            surv_counts[sid] = surv_counts.get(sid, 0) + 1
 
     SAR_runs = np.array(SAR_runs)
     SAR_mean = SAR_runs.mean(axis=0)
@@ -772,9 +741,47 @@ def plot_competition(species_alpha: list[float]):
     plt.loglog(grid_sizes, field.power_law(np.array(grid_sizes), *params), '-', label=f'Fit (z={z_fit:.2f})')
     plt.xlabel("Area")
     plt.ylabel("Mean species richness")
-    plt.title("Species–Area Relationship with Branching & Competition")
+    plt.title("Species-Area Relationship with Branching & Competition")
     plt.legend()
     plt.grid(True, which="both", ls="--")
+    plt.savefig(f"{output_dir}mean_species_richness.png")
+    plt.show()
+
+    # Plot resource field
+    plt.figure(figsize=(8, 6))
+    plt.imshow(Res, origin='lower', cmap='viridis', interpolation='nearest')
+    plt.colorbar(label='Resource value')
+    plt.title('Resource Field (Gamma distribution)')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.savefig(f"{output_dir}resource_field.png")
+    plt.show()
+
+    # Plot population for chosen alpha
+    alpha_index_to_plot = 6
+    alpha_value = alpha_values[alpha_index_to_plot]
+
+    # Get all species belonging to this alpha
+    species_keys = [
+        key for key in field.points.keys()
+        if key.startswith(f"{alpha_value}-")
+    ]
+
+    counts = []
+    for key in species_keys:
+        species = field.points[key]
+        species_id = species[0].species_id
+        count = sum(1 for ind in surviving_inds if ind.species_id == species_id)
+        counts.append(count)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.bar(range(len(counts)), counts, color='skyblue', edgecolor='black')
+    plt.xlabel("Species replicate")
+    plt.ylabel("Remaining individuals")
+    plt.title(f"Remaining Individuals per Species (α = {alpha_value:.3f})")
+    plt.grid(axis='y', alpha=0.3)
+    plt.savefig(f"{output_dir}remaining_individuals.png")
     plt.show()
 
 def main():
@@ -810,6 +817,8 @@ def main():
     plot_sar(grid, R_values, n_samples=2000)
 
     plot_lognormal_distribution(grid)
+
+    plot_competition(alpha_values, [o for o in alpha_values for i in range(10)])
 
 
 if __name__ == "__main__":
